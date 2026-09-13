@@ -1,0 +1,18 @@
+{
+  "services": {
+    "web": {
+      "root": ".",
+      "framework": "nextjs",
+      "buildCommand": "pnpm build"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "web"
+      }
+    }
+  ]
+}

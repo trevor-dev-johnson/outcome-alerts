@@ -1,0 +1,12 @@
+node_modules
+.pnpm-store
+.next
+.env
+.env.local
+coverage
+*.log
+*.tsbuildinfo
+.DS_Store
+
+.vercel
+.env*

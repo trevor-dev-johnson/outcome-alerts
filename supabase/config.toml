@@ -1,0 +1,9 @@
+project_id = "oddsup"
+
+[auth]
+site_url = "https://outcome-alerts.vercel.app"
+additional_redirect_urls = [
+  "http://localhost:3000/auth/callback",
+  "https://getoddsup.vercel.app/auth/callback",
+  "https://outcome-alerts.vercel.app/auth/callback",
+]
