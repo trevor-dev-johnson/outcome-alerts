@@ -4,7 +4,9 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/auth";
+import { hasSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
+import { clearLocalSession } from "@/lib/supabase/session";
 
 export async function connectTelegram() {
   const viewer = await getViewer(); if (!viewer || viewer.preview) return;
@@ -25,6 +27,8 @@ export async function disconnectTelegram() {
 }
 
 export async function signOut() {
-  const viewer = await getViewer(); if (!viewer || viewer.preview) redirect("/");
-  const supabase = await createClient(); await supabase.auth.signOut(); redirect("/");
+  if (!hasSupabaseEnv()) redirect("/");
+  const supabase = await createClient();
+  await clearLocalSession(supabase);
+  redirect("/");
 }

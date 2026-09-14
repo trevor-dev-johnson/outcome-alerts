@@ -1,6 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+export function shouldRedirectAuthenticatedUser(pathname: string, authError: string | null) {
+  const failedAuthCallback = pathname === "/login" && authError === "auth";
+  return !failedAuthCallback && (pathname === "/login" || pathname === "/");
+}
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
   const supabase = createServerClient(
@@ -29,7 +34,7 @@ export async function updateSession(request: NextRequest) {
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
-  if (user && (pathname === "/login" || pathname === "/")) {
+  if (user && shouldRedirectAuthenticatedUser(pathname, request.nextUrl.searchParams.get("error"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/markets";
     return NextResponse.redirect(url);

@@ -26,6 +26,10 @@ export async function getAlerts(): Promise<Alert[]> {
     { id: "preview-2", user_id: viewer.id, market_id: "1059", market_name: "Will SOL close the month above $250?", outcome: "NO", operator: "below", threshold: .75, status: "triggered", last_observed_price: .709, triggered_at: new Date(Date.now()-3600000).toISOString(), created_at: new Date(Date.now()-172800000).toISOString(), updated_at: new Date().toISOString() },
   ];
   const supabase = await createClient();
-  const { data } = await supabase.from("alerts").select("*").order("created_at", { ascending: false });
+  const { data } = await supabase
+    .from("alerts")
+    .select("*")
+    .eq("user_id", viewer.id)
+    .order("created_at", { ascending: false });
   return (data ?? []) as Alert[];
 }
