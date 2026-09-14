@@ -129,6 +129,7 @@ a { color: inherit; text-decoration: none; }
 .landing::after { content:""; position:absolute; width: 52vw; height:52vw; right:-12vw; bottom:-27vw; border:1px solid rgba(185,242,39,.25); border-radius:50%; box-shadow: 0 0 0 6vw rgba(185,242,39,.025), 0 0 0 13vw rgba(185,242,39,.02); }
 .landing-main { display:flex; align-items:center; position:relative; z-index:1; padding: 60px 0 100px; }
 .landing-copy { max-width: 790px; animation: rise .65s cubic-bezier(.2,.8,.2,1) both; }
+.landing-copy > .eyebrow { margin: 0 0 24px; }
 .landing h1 { font-size: clamp(68px, 12vw, 158px); line-height: .77; letter-spacing: -.08em; margin: 0 0 48px; }
 .landing h1 span { display:block; color:var(--signal); margin-left: .48em; }
 .landing-bottom { display:flex; align-items:center; gap:28px; max-width:620px; margin-left:.6em; }
