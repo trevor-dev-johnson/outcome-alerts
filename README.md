@@ -9,13 +9,13 @@ oddsup monitors Hyperliquid HIP-4 outcome markets and sends a one-time Telegram 
 - **Railway worker** — one shared Hyperliquid WebSocket, active-alert synchronization, crossing evaluation, and grammY bot polling
 - **Hyperliquid** — `outcomeMeta` discovery and `activeAssetCtx` live midpoint subscriptions
 
-The worker keeps one connection and deduplicates subscriptions by HIP-4 side coin. It refreshes active alerts every 15 seconds by default, automatically resubscribes after disconnects, and treats the first observation after a re-arm as a baseline rather than a trigger.
+The worker keeps one connection and deduplicates subscriptions by HIP-4 side coin. It refreshes active alerts every 15 seconds by default, automatically resubscribes after disconnects, and treats the first observation after a re-arm as a baseline rather than a trigger. Before sending Telegram, it atomically claims the alert in Postgres; completion retries reuse that claim so an ambiguous database response cannot cause a second notification.
 
 ## Local setup
 
 1. Install dependencies with `pnpm install`.
 2. Copy `.env.example` to `.env.local` and add your credentials.
-3. Create a Supabase project and apply `supabase/migrations/20260912000000_initial_schema.sql` in the SQL editor or with the Supabase CLI.
+3. Create a Supabase project and apply every migration in `supabase/migrations/` in timestamp order, either in the SQL editor or with the Supabase CLI.
 4. In Supabase Auth, add `http://localhost:3000/auth/callback` and your production callback URL to the allowed redirect URLs.
 5. Create a Telegram bot using BotFather and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_USERNAME`.
 6. Run the web app with `pnpm dev`.
@@ -71,5 +71,6 @@ An alert becomes `triggered` after a successful Telegram send. Re-arming clears 
 - RLS restricts profiles, alerts, and connection tokens to the authenticated owner.
 - Raw Telegram connection tokens are never stored; only SHA-256 hashes are persisted.
 - Tokens expire after ten minutes and are consumed atomically by a service-role-only database function.
+- Alert delivery claims are service-role-only and are cleared when a user explicitly re-arms an alert.
 - Telegram numeric user and chat IDs are the identity keys; usernames are display-only.
 - Service-role and Telegram bot secrets are never exposed through `NEXT_PUBLIC_` variables.
