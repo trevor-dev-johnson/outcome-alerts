@@ -18,12 +18,30 @@ export class AlertEvaluator {
   constructor(private readonly supabase: SupabaseClient, private readonly bot: Bot) {}
 
   async refresh() {
-    const { data, error } = await this.supabase.from("alerts").select("*, profiles!inner(telegram_chat_id)").eq("status", "active");
+    const { data, error } = await this.supabase.from("alerts").select("*").eq("status", "active");
     if (error) throw error;
+
+    const alerts = (data ?? []) as Alert[];
+    const userIds = [...new Set(alerts.map((alert) => alert.user_id))];
+    const chatIds = new Map<string, string>();
+
+    if (userIds.length > 0) {
+      const { data: profiles, error: profilesError } = await this.supabase
+        .from("profiles")
+        .select("id, telegram_chat_id")
+        .in("id", userIds);
+      if (profilesError) throw profilesError;
+
+      for (const profile of profiles ?? []) {
+        if (profile.telegram_chat_id != null) {
+          chatIds.set(profile.id, String(profile.telegram_chat_id));
+        }
+      }
+    }
+
     const next = new Map<string, WatchedAlert>();
-    for (const row of data ?? []) {
-      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-      next.set(row.id, { ...(row as Alert), telegram_chat_id: profile?.telegram_chat_id ? String(profile.telegram_chat_id) : null });
+    for (const alert of alerts) {
+      next.set(alert.id, { ...alert, telegram_chat_id: chatIds.get(alert.user_id) ?? null });
     }
     this.alerts = next;
     return new Set([...next.values()].map(coinFor).filter((coin) => !coin.includes("NaN")));

@@ -10,9 +10,18 @@ const evaluator = new AlertEvaluator(supabase, bot);
 const stream = new HyperliquidStream(process.env.HYPERLIQUID_WS_URL ?? "wss://api.hyperliquid.xyz/ws", (coin, price) => evaluator.onPrice(coin, price));
 const syncInterval = Number(process.env.ALERT_SYNC_INTERVAL_MS ?? 15_000);
 
+function describeError(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null) {
+    try { return JSON.stringify(error); }
+    catch { return "Unknown object error"; }
+  }
+  return String(error);
+}
+
 async function syncAlerts() {
   try { stream.setCoins(await evaluator.refresh()); }
-  catch (error) { console.error("alert_sync_failed", { error:error instanceof Error ? error.message:String(error) }); }
+  catch (error) { console.error("alert_sync_failed", { error:describeError(error) }); }
 }
 
 async function main() {
@@ -23,4 +32,4 @@ async function main() {
   process.once("SIGINT", shutdown); process.once("SIGTERM", shutdown);
 }
 
-main().catch((error) => { console.error("worker_start_failed", { error:error instanceof Error ? error.message:String(error) }); process.exit(1); });
+main().catch((error) => { console.error("worker_start_failed", { error:describeError(error) }); process.exit(1); });
