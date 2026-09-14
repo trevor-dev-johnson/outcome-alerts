@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { createClient, type Session, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const runProductionIsolation = process.env.RUN_SUPABASE_ISOLATION_TESTS === "1";
@@ -18,7 +19,10 @@ describeIsolation("production two-user isolation", () => {
   let userB: User;
   let clientA: SupabaseClient;
   let clientB: SupabaseClient;
+  let sessionA: Session;
+  let sessionB: Session;
   let alertB: string;
+  const markerA = `Browser isolation marker ${suffix}`;
 
   function authenticatedClient() {
     return createClient(url, serviceKey, {
@@ -46,12 +50,26 @@ describeIsolation("production two-user isolation", () => {
 
     clientA = authenticatedClient();
     clientB = authenticatedClient();
-    const [{ error: signInA }, { error: signInB }] = await Promise.all([
+    const [{ data: signedInA, error: signInA }, { data: signedInB, error: signInB }] = await Promise.all([
       clientA.auth.signInWithPassword({ email: emailA, password }),
       clientB.auth.signInWithPassword({ email: emailB, password }),
     ]);
     expect(signInA).toBeNull();
     expect(signInB).toBeNull();
+    sessionA = signedInA.session!;
+    sessionB = signedInB.session!;
+
+    const markerInsert = await clientA.from("alerts").insert({
+      user_id: userA.id,
+      market_id: "browser-cookie-isolation",
+      market_name: markerA,
+      outcome: "YES",
+      operator: "above",
+      threshold: 0.5,
+      status: "active",
+      last_observed_price: 0.4,
+    });
+    expect(markerInsert.error).toBeNull();
 
     const { data, error } = await clientB.from("alerts").insert({
       user_id: userB.id,
@@ -109,6 +127,47 @@ describeIsolation("production two-user isolation", () => {
     expect((await switchingClient.auth.getUser()).data.user?.id).toBe(userB.id);
     expect((await switchingClient.from("profiles").select("id")).data).toEqual([{ id: userB.id }]);
   });
+
+  it("switches the SSR browser cookie identity without rendering User A's alerts to User B", async () => {
+    async function cookieHeader(session: Session) {
+      const jar = new Map<string, string>();
+      const client = createServerClient(url, serviceKey, {
+        cookies: {
+          getAll: () => [...jar].map(([name, value]) => ({ name, value })),
+          setAll: (cookies) => {
+            for (const cookie of cookies) {
+              if (cookie.value) jar.set(cookie.name, cookie.value);
+              else jar.delete(cookie.name);
+            }
+          },
+        },
+      });
+      const { error } = await client.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
+      expect(error).toBeNull();
+      return [...jar].map(([name, value]) => `${name}=${value}`).join("; ");
+    }
+
+    const appUrl = process.env.SECURITY_TEST_APP_URL ?? "https://oddsup.xyz";
+    const headersA = { cookie: await cookieHeader(sessionA) };
+    const [settingsA, alertsA] = await Promise.all([
+      fetch(`${appUrl}/settings`, { headers: headersA }).then((response) => response.text()),
+      fetch(`${appUrl}/alerts`, { headers: headersA }).then((response) => response.text()),
+    ]);
+    expect(settingsA).toContain(emailA);
+    expect(alertsA).toContain(markerA);
+
+    const headersB = { cookie: await cookieHeader(sessionB) };
+    const [settingsB, alertsB] = await Promise.all([
+      fetch(`${appUrl}/settings`, { headers: headersB }).then((response) => response.text()),
+      fetch(`${appUrl}/alerts`, { headers: headersB }).then((response) => response.text()),
+    ]);
+    expect(settingsB).toContain(emailB);
+    expect(settingsB).not.toContain(emailA);
+    expect(alertsB).not.toContain(markerA);
+  }, 20_000);
 
   it("prevents User A from reading or mutating User B's alert", async () => {
     const read = await clientA.from("alerts").select("id,status,user_id").eq("id", alertB);
