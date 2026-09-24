@@ -47,6 +47,48 @@ describe("invalid SSR auth recovery", () => {
     expect(setCookie).not.toContain("theme=");
   });
 
+  it("preserves pending PKCE state when no authenticated session exists yet", async () => {
+    getUser.mockResolvedValue({
+      data: { user: null },
+      error: { name: "AuthSessionMissingError", status: 400 },
+    });
+    const request = new NextRequest("https://oddsup.xyz/", {
+      headers: {
+        cookie: [
+          "sb-project-ref-auth-token-code-verifier=legacy",
+          "sb-project-ref-auth-token-flows-code-verifier=index",
+          "sb-project-ref-auth-token-flow-aaaaaaaa-code-verifier=pending",
+        ].join("; "),
+      },
+    });
+
+    const response = await updateSession(request);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("removes an invalid session without removing simultaneous pending PKCE flows", async () => {
+    getUser.mockResolvedValue({
+      data: { user: null },
+      error: { name: "AuthApiError", code: "refresh_token_not_found", status: 400 },
+    });
+    const request = new NextRequest("https://oddsup.xyz/alerts", {
+      headers: {
+        cookie: [
+          "sb-project-ref-auth-token.0=stale-session",
+          "sb-project-ref-auth-token-flow-aaaaaaaa-code-verifier=pending",
+          "sb-project-ref-auth-token-flows-code-verifier=index",
+        ].join("; "),
+      },
+    });
+
+    const response = await updateSession(request);
+    const setCookie = response.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("sb-project-ref-auth-token.0=");
+    expect(setCookie).not.toContain("flow-aaaaaaaa-code-verifier=");
+    expect(setCookie).not.toContain("flows-code-verifier=");
+  });
+
   it("recovers from a malformed session cookie", async () => {
     getUser.mockRejectedValue(new SyntaxError("Unexpected token"));
     const request = new NextRequest("https://oddsup.xyz/markets", {

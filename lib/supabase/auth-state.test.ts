@@ -3,9 +3,12 @@ import {
   clearLocalAuthState,
   expireSupabaseAuthCookies,
   expireSupabasePkceVerifierCookies,
+  expireSupabaseSessionCookies,
   hasSupabaseAuthCookies,
+  hasSupabaseSessionCookies,
   isInvalidStoredAuthError,
   isSupabaseAuthCookie,
+  isSupabaseSessionCookie,
 } from "./auth-state";
 
 const supabaseUrl = "https://project-ref.supabase.co";
@@ -17,6 +20,33 @@ describe("Supabase browser auth state", () => {
     expect(isSupabaseAuthCookie("sb-project-ref-auth-token-code-verifier", supabaseUrl)).toBe(true);
     expect(isSupabaseAuthCookie("sb-project-ref-auth-token-flow-a1b2c3d4-code-verifier", supabaseUrl)).toBe(true);
     expect(isSupabaseAuthCookie("theme", supabaseUrl)).toBe(false);
+  });
+
+  it("recognizes only the base session cookie and numeric session chunks", () => {
+    expect(isSupabaseSessionCookie("sb-project-ref-auth-token", supabaseUrl)).toBe(true);
+    expect(isSupabaseSessionCookie("sb-project-ref-auth-token.0", supabaseUrl)).toBe(true);
+    expect(isSupabaseSessionCookie("sb-project-ref-auth-token.12", supabaseUrl)).toBe(true);
+    expect(isSupabaseSessionCookie("sb-project-ref-auth-token.invalid", supabaseUrl)).toBe(false);
+    expect(isSupabaseSessionCookie("sb-project-ref-auth-token-code-verifier", supabaseUrl)).toBe(false);
+    expect(isSupabaseSessionCookie("sb-project-ref-auth-token-flows-code-verifier", supabaseUrl)).toBe(false);
+    expect(isSupabaseSessionCookie("sb-project-ref-auth-token-flow-a1b2c3d4-code-verifier", supabaseUrl)).toBe(false);
+  });
+
+  it("expires session chunks without removing simultaneous pending PKCE flows", () => {
+    const setCookie = vi.fn();
+    const cookies = [
+      { name: "sb-project-ref-auth-token.0", value: "stale-session" },
+      { name: "sb-project-ref-auth-token-flow-aaaaaaaa-code-verifier", value: "first" },
+      { name: "sb-project-ref-auth-token-flow-bbbbbbbb-code-verifier", value: "second" },
+      { name: "sb-project-ref-auth-token-flows-code-verifier", value: "index" },
+      { name: "sb-project-ref-auth-token-code-verifier", value: "legacy" },
+    ];
+
+    expect(hasSupabaseSessionCookies(cookies, supabaseUrl)).toBe(true);
+    expect(expireSupabaseSessionCookies(cookies, setCookie, supabaseUrl)).toEqual([
+      "sb-project-ref-auth-token.0",
+    ]);
+    expect(setCookie).toHaveBeenCalledTimes(1);
   });
 
   it("expires only OddsUp Supabase auth cookies", () => {

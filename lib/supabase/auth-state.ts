@@ -23,8 +23,18 @@ export function isSupabaseAuthCookie(name: string, supabaseUrl?: string) {
   return name === storageKey || name.startsWith(`${storageKey}.`) || name.startsWith(`${storageKey}-`);
 }
 
+export function isSupabaseSessionCookie(name: string, supabaseUrl?: string) {
+  const storageKey = supabaseAuthStorageKey(supabaseUrl);
+  if (!storageKey) return false;
+  return name === storageKey || /^\.\d+$/.test(name.slice(storageKey.length));
+}
+
 export function hasSupabaseAuthCookies(cookies: Cookie[], supabaseUrl?: string) {
   return cookies.some(({ name }) => isSupabaseAuthCookie(name, supabaseUrl));
+}
+
+export function hasSupabaseSessionCookies(cookies: Cookie[], supabaseUrl?: string) {
+  return cookies.some(({ name }) => isSupabaseSessionCookie(name, supabaseUrl));
 }
 
 export function expireSupabaseAuthCookies(
@@ -34,6 +44,18 @@ export function expireSupabaseAuthCookies(
 ) {
   const names = new Set(
     cookies.filter(({ name }) => isSupabaseAuthCookie(name, supabaseUrl)).map(({ name }) => name),
+  );
+  names.forEach((name) => setCookie(name, "", { maxAge: 0, path: "/" }));
+  return [...names];
+}
+
+export function expireSupabaseSessionCookies(
+  cookies: Cookie[],
+  setCookie: (name: string, value: string, options: { maxAge: number; path: string }) => unknown,
+  supabaseUrl?: string,
+) {
+  const names = new Set(
+    cookies.filter(({ name }) => isSupabaseSessionCookie(name, supabaseUrl)).map(({ name }) => name),
   );
   names.forEach((name) => setCookie(name, "", { maxAge: 0, path: "/" }));
   return [...names];

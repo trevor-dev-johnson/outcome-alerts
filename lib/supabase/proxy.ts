@@ -1,8 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import {
-  expireSupabaseAuthCookies,
-  hasSupabaseAuthCookies,
+  expireSupabaseSessionCookies,
+  hasSupabaseSessionCookies,
   isInvalidStoredAuthError,
   safeAuthError,
 } from "@/lib/supabase/auth-state";
@@ -57,7 +57,7 @@ export async function updateSession(request: NextRequest) {
   const requestCookies = request.cookies.getAll();
   if (
     authError &&
-    hasSupabaseAuthCookies(requestCookies) &&
+    hasSupabaseSessionCookies(requestCookies) &&
     isInvalidStoredAuthError(authError)
   ) {
     console.warn("Invalid Supabase browser auth state", safeAuthError(authError));
@@ -70,7 +70,7 @@ export async function updateSession(request: NextRequest) {
       url.searchParams.set("error", "session-expired");
       response = NextResponse.redirect(url);
     }
-    expireSupabaseAuthCookies(
+    expireSupabaseSessionCookies(
       requestCookies,
       (name, value, options) => response.cookies.set(name, value, options),
     );
