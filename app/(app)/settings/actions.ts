@@ -1,12 +1,13 @@
 "use server";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/auth";
 import { hasSupabaseEnv } from "@/lib/env";
+import { clearLocalAuthState } from "@/lib/supabase/auth-state";
 import { createClient } from "@/lib/supabase/server";
-import { clearLocalSession } from "@/lib/supabase/session";
 
 export async function connectTelegram() {
   const viewer = await getViewer(); if (!viewer || viewer.preview) return;
@@ -29,6 +30,6 @@ export async function disconnectTelegram() {
 export async function signOut() {
   if (!hasSupabaseEnv()) redirect("/");
   const supabase = await createClient();
-  await clearLocalSession(supabase);
+  await clearLocalAuthState(supabase, await cookies());
   redirect("/");
 }

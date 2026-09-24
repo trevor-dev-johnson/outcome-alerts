@@ -13,4 +13,10 @@ describe("clearLocalSession", () => {
     const signOut = vi.fn(async () => ({ error: failure }));
     await expect(clearLocalSession({ auth: { signOut } })).resolves.toBe(failure);
   });
+
+  it("returns thrown sign-out failures so cookie recovery can still run", async () => {
+    const failure = new Error("network failed");
+    const signOut = vi.fn(async () => { throw failure; });
+    await expect(clearLocalSession({ auth: { signOut } })).resolves.toBe(failure);
+  });
 });

@@ -1,10 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { z } from "zod";
 import { hasSupabaseEnv } from "@/lib/env";
+import { clearLocalAuthState } from "@/lib/supabase/auth-state";
 import { createClient } from "@/lib/supabase/server";
-import { clearLocalSession } from "@/lib/supabase/session";
 
 export type LoginState = { message?: string; error?: string };
 
@@ -13,8 +14,7 @@ export async function sendMagicLink(_: LoginState, formData: FormData): Promise<
   if (!parsed.success) return { error: "Enter a valid email address." };
   if (!hasSupabaseEnv()) return { message: "Preview mode is active. Open Markets to explore the interface." };
   const supabase = await createClient();
-  const signOutError = await clearLocalSession(supabase);
-  if (signOutError) return { error: "Could not clear the previous session. Please try again." };
+  await clearLocalAuthState(supabase, await cookies());
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const { error } = await supabase.auth.signInWithOtp({ email: parsed.data, options: { emailRedirectTo: `${appUrl}/auth/callback?next=/markets` } });
   if (error) return { error: error.message };
