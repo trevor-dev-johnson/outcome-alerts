@@ -1,6 +1,10 @@
-import type { Market } from "@/lib/types";
+import { unstable_cache } from "next/cache";
+import type { Market, MarketSnapshot } from "@/lib/types";
 
 const API_URL = process.env.HYPERLIQUID_API_URL ?? "https://api.hyperliquid.xyz";
+export const MARKET_CACHE_SECONDS = 5;
+const MARKET_CACHE_MAX_AGE_MS = MARKET_CACHE_SECONDS * 1_000;
+const MARKET_REVALIDATION_COOLDOWN_MS = 10_000;
 
 interface OutcomeMetaItem {
   outcome: number | string;
@@ -60,26 +64,38 @@ function sideCoin(outcomeId: string, sideIndex: number) {
   return `#${Number(outcomeId) * 10 + sideIndex}`;
 }
 
-async function info<T>(body: Record<string, unknown>): Promise<T> {
-  const response = await fetch(`${API_URL}/info`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    cache: "no-store",
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!response.ok) throw new Error(`Hyperliquid returned ${response.status}`);
-  return response.json() as Promise<T>;
+async function info<T>(requestType: string, body: Record<string, unknown>): Promise<T> {
+  const startedAt = performance.now();
+  let status = 0;
+  try {
+    const response = await fetch(`${API_URL}/info`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    status = response.status;
+    if (!response.ok) throw new Error(`Hyperliquid returned ${response.status}`);
+    return response.json() as Promise<T>;
+  } finally {
+    console.info("hyperliquid_request_timing", {
+      requestType,
+      durationMs: Math.round(performance.now() - startedAt),
+      status,
+    });
+  }
 }
 
 export async function fetchMarkets(): Promise<Market[]> {
+  const startedAt = performance.now();
   const [metadata, mids] = await Promise.all([
-    info<{ outcomes?: OutcomeMetaItem[]; questions?: OutcomeQuestion[] }>({ type: "outcomeMeta" }),
-    info<Record<string, string>>({ type: "allMids" }),
+    info<{ outcomes?: OutcomeMetaItem[]; questions?: OutcomeQuestion[] }>("outcomeMeta", { type: "outcomeMeta" }),
+    info<Record<string, string>>("allMids", { type: "allMids" }),
   ]);
   const questionByOutcome = new Map<number, OutcomeQuestion>();
   for (const question of metadata.questions ?? []) for (const id of question.namedOutcomes ?? []) questionByOutcome.set(id, question);
-  return (metadata.outcomes ?? [])
+  const markets = (metadata.outcomes ?? [])
     .filter((item) => item.status?.toLowerCase() !== "resolved" && !item.name?.toLowerCase().includes("fallback") && item.name !== "Recurring Named Outcome")
     .map((item) => {
       const id = String(item.outcome);
@@ -100,6 +116,11 @@ export async function fetchMarkets(): Promise<Market[]> {
         closesAt: item.endTime ? new Date(item.endTime).toISOString() : null,
       };
     });
+  console.info("hyperliquid_market_assembly_timing", {
+    durationMs: Math.round(performance.now() - startedAt),
+    marketCount: markets.length,
+  });
+  return markets;
 }
 
 export const previewMarkets: Market[] = [
@@ -109,13 +130,77 @@ export const previewMarkets: Market[] = [
   { id: "1059", name: "Will SOL close the month above $250?", category: "Crypto", yesCoin: "#10590", noCoin: "#10591", yesPrice: 0.291, noPrice: 0.709, closesAt: "2026-09-30T23:59:59Z" },
 ];
 
-export async function getMarketsWithFallback() {
+type LiveMarketSnapshot = Omit<MarketSnapshot, "source"> & { source: "live" };
+
+async function loadLiveMarketSnapshot(): Promise<LiveMarketSnapshot> {
+  const markets = await fetchMarkets();
+  if (!markets.length) throw new Error("Hyperliquid returned no active outcome markets");
+  return { markets, source: "live", fetchedAt: new Date().toISOString() };
+}
+
+const loadCachedLiveMarketSnapshot = unstable_cache(
+  loadLiveMarketSnapshot,
+  ["public-hip4-market-snapshot-v1"],
+  { revalidate: MARKET_CACHE_SECONDS, tags: ["public-hip4-markets"] },
+);
+
+let recentSnapshot: LiveMarketSnapshot | null = null;
+let snapshotReadInFlight: Promise<LiveMarketSnapshot> | null = null;
+let staleRevalidationCooldownUntil = 0;
+
+function snapshotAgeMs(snapshot: LiveMarketSnapshot, now = Date.now()) {
+  const fetchedAt = Date.parse(snapshot.fetchedAt);
+  return Number.isFinite(fetchedAt) ? Math.max(0, now - fetchedAt) : Number.POSITIVE_INFINITY;
+}
+
+async function readSharedSnapshot() {
+  if (recentSnapshot) {
+    const now = Date.now();
+    if (
+      snapshotAgeMs(recentSnapshot, now) <= MARKET_CACHE_MAX_AGE_MS ||
+      now < staleRevalidationCooldownUntil
+    ) {
+      return recentSnapshot;
+    }
+  }
+  if (!snapshotReadInFlight) {
+    snapshotReadInFlight = loadCachedLiveMarketSnapshot()
+      .then((snapshot) => {
+        recentSnapshot = snapshot;
+        staleRevalidationCooldownUntil = snapshotAgeMs(snapshot) > MARKET_CACHE_MAX_AGE_MS
+          ? Date.now() + MARKET_REVALIDATION_COOLDOWN_MS
+          : 0;
+        return snapshot;
+      })
+      .finally(() => { snapshotReadInFlight = null; });
+  }
+  return snapshotReadInFlight;
+}
+
+export async function getMarketsWithFallback(): Promise<MarketSnapshot> {
+  const startedAt = performance.now();
   try {
-    const markets = await fetchMarkets();
-    if (markets.length) return { markets, source: "live" as const };
-    return { markets: previewMarkets, source: "preview" as const };
+    const snapshot = await readSharedSnapshot();
+    const ageMs = snapshotAgeMs(snapshot);
+    // Next can return the previous value while it performs one coalesced
+    // background revalidation. Keep that behavior fast, but never call the
+    // expired snapshot live.
+    const source = ageMs > MARKET_CACHE_MAX_AGE_MS ? "stale" : "live";
+    console.info("public_market_snapshot_timing", {
+      durationMs: Math.round(performance.now() - startedAt),
+      snapshotAgeMs: ageMs,
+      source,
+      marketCount: snapshot.markets.length,
+    });
+    return { ...snapshot, source };
   } catch (error) {
     console.error("market_fetch_failed", { error: error instanceof Error ? error.message : String(error) });
-    return { markets: previewMarkets, source: "preview" as const };
+    console.info("public_market_snapshot_timing", {
+      durationMs: Math.round(performance.now() - startedAt),
+      snapshotAgeMs: 0,
+      source: "preview",
+      marketCount: previewMarkets.length,
+    });
+    return { markets: previewMarkets, source: "preview", fetchedAt: new Date().toISOString() };
   }
 }

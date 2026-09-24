@@ -14,7 +14,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <h1>Sign in.</h1>
       <p>We’ll email you a secure link. No password required.</p>
       {(error === "auth" || error === "session-expired") && (
-        <div className="notice">Your session expired. Please sign in again.</div>
+        <div className="notice">This sign-in link was opened in a different browser or has expired. Request a new link and open it in the same browser where you started signing in.</div>
       )}
       {preview && <div className="notice">Local preview mode · Supabase credentials are not configured.</div>}
       <LoginForm preview={preview} />

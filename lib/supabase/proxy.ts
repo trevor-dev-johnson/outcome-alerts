@@ -36,6 +36,7 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
+  const authStartedAt = performance.now();
   let user = null;
   let authError: unknown = null;
   try {
@@ -45,6 +46,13 @@ export async function updateSession(request: NextRequest) {
   } catch (error) {
     authError = error;
   }
+
+  const finishAuthTiming = (timedResponse: NextResponse, outcome: string) => {
+    const durationMs = Math.round(performance.now() - authStartedAt);
+    timedResponse.headers.append("server-timing", `supabase-auth;dur=${durationMs}`);
+    console.info("supabase_auth_timing", { pathname, durationMs, outcome });
+    return timedResponse;
+  };
 
   const requestCookies = request.cookies.getAll();
   if (
@@ -66,7 +74,7 @@ export async function updateSession(request: NextRequest) {
       requestCookies,
       (name, value, options) => response.cookies.set(name, value, options),
     );
-    return response;
+    return finishAuthTiming(response, "invalid-session");
   }
 
   const protectedPath = ["/markets", "/alerts", "/settings"].some(
@@ -76,12 +84,12 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    return finishAuthTiming(NextResponse.redirect(url), "anonymous-redirect");
   }
   if (user && shouldRedirectAuthenticatedUser(pathname, request.nextUrl.searchParams.get("error"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/markets";
-    return NextResponse.redirect(url);
+    return finishAuthTiming(NextResponse.redirect(url), "authenticated-redirect");
   }
-  return response;
+  return finishAuthTiming(response, user ? "authenticated" : authError ? "auth-error" : "anonymous");
 }

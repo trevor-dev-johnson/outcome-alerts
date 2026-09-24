@@ -40,6 +40,7 @@ describe("invalid SSR auth recovery", () => {
 
     const response = await updateSession(request);
     expect(response.headers.get("location")).toBe("https://oddsup.xyz/login?error=session-expired");
+    expect(response.headers.get("server-timing")).toMatch(/^supabase-auth;dur=\d+$/);
     const setCookie = response.headers.get("set-cookie") ?? "";
     expect(setCookie).toContain("sb-project-ref-auth-token=");
     expect(setCookie.toLowerCase()).toContain("max-age=0");

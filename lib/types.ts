@@ -1,6 +1,7 @@
 export type Outcome = "YES" | "NO";
 export type Operator = "above" | "below";
 export type AlertStatus = "active" | "triggered" | "disabled";
+export type MarketSource = "live" | "preview" | "stale";
 
 export interface Market {
   id: string;
@@ -12,6 +13,12 @@ export interface Market {
   yesPrice: number | null;
   noPrice: number | null;
   closesAt?: string | null;
+}
+
+export interface MarketSnapshot {
+  markets: Market[];
+  source: MarketSource;
+  fetchedAt: string;
 }
 
 export interface Alert {
