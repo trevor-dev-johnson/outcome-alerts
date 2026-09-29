@@ -74,7 +74,7 @@
   color: var(--text);
 }
 
-.copy a:not(.btn) {
+.copy a:not(:global(.btn)) {
   color: var(--text);
   text-decoration: underline;
   text-decoration-color: var(--signal-dim);
