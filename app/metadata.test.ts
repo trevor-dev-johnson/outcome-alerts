@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import manifest from "./manifest";
 import robots from "./robots";
 import sitemap from "./sitemap";
-import { homeJsonLd, SITE_URL } from "@/lib/site";
+import { aboutJsonLd, homeJsonLd, SITE_URL } from "@/lib/site";
 
 describe("public metadata", () => {
-  it("indexes only the public homepage", () => {
+  it("indexes only the public pages", () => {
     expect(sitemap()).toEqual([
       expect.objectContaining({ url: SITE_URL, priority: 1 }),
+      expect.objectContaining({ url: `${SITE_URL}/about`, priority: 0.8 }),
     ]);
     const policy = robots();
     expect(policy.sitemap).toBe(`${SITE_URL}/sitemap.xml`);
@@ -35,5 +36,14 @@ describe("public metadata", () => {
       "WebApplication",
     ]);
     expect(JSON.stringify(homeJsonLd)).not.toContain("user");
+  });
+
+  it("describes the about route without duplicating the site graph", () => {
+    expect(aboutJsonLd).toEqual(expect.objectContaining({
+      "@type": "AboutPage",
+      url: `${SITE_URL}/about`,
+      isPartOf: { "@id": `${SITE_URL}/#website` },
+      about: { "@id": `${SITE_URL}/#application` },
+    }));
   });
 });

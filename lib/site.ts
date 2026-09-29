@@ -32,3 +32,16 @@ export const homeJsonLd = {
     },
   ],
 };
+
+export const aboutJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "AboutPage",
+  "@id": `${SITE_URL}/about#page`,
+  url: `${SITE_URL}/about`,
+  name: "About oddsUp | Hyperliquid HIP-4 Market Alerts",
+  description:
+    "Learn how oddsUp monitors Hyperliquid HIP-4 outcome markets and sends Telegram alerts when market probabilities cross the thresholds you set.",
+  isPartOf: { "@id": `${SITE_URL}/#website` },
+  about: { "@id": `${SITE_URL}/#application` },
+  inLanguage: "en",
+};

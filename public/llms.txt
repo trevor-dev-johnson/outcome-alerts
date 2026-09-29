@@ -7,6 +7,7 @@ Canonical site: https://oddsup.xyz/
 ## Public pages
 
 - Homepage: https://oddsup.xyz/
+- About oddsUp: https://oddsup.xyz/about
 
 ## Product behavior
 

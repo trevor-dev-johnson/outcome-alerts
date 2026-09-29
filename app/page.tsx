@@ -30,7 +30,7 @@ export default function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd).replace(/</g, "\\u003c") }}
       />
-      <header><div className="shell topbar-inner"><Brand /><Link href="/login" className="btn btn-quiet">Sign in</Link></div></header>
+      <header><div className="shell topbar-inner"><Brand /><nav className="nav" aria-label="Public navigation"><Link href="/about">About</Link><Link href="/login">Sign in</Link></nav></div></header>
       <div className="landing-main shell">
         <div className="landing-copy">
           <p className="eyebrow">Hyperliquid HIP-4 · Probability monitoring</p>
