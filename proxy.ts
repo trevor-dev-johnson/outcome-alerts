@@ -21,6 +21,8 @@ export async function proxy(request: NextRequest) {
     process.env.VERCEL_ENV === "production",
   );
   if (canonical) return NextResponse.redirect(canonical, 308);
+  // Public crawl resources must not depend on an auth lookup or stale cookies.
+  if (["/robots.txt", "/sitemap.xml"].includes(request.nextUrl.pathname)) return NextResponse.next();
   if (!hasSupabaseEnv()) return;
   return updateSession(request);
 }
