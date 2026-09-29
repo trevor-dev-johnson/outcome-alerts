@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<rect width="1200" height="630" fill="#090b0b"/>
+<g fill="none" stroke="#b9f227"><circle cx="1160" cy="595" r="270" opacity=".15"/><circle cx="1160" cy="595" r="350" opacity=".08"/><circle cx="1160" cy="595" r="430" opacity=".05"/></g>
+<rect x="65" y="64" width="38" height="38" rx="7" transform="rotate(45 84 83)" fill="none" stroke="#b9f227" stroke-width="3"/><circle cx="84" cy="83" r="7" fill="#b9f227"/>
+<g font-family="DejaVu Sans, sans-serif"><text x="127" y="96" fill="#f0f4f1" font-size="38" font-weight="bold" letter-spacing="-2">odds<tspan fill="#b9f227">up.</tspan></text>
+<text x="64" y="202" fill="#a5afa9" font-size="17" letter-spacing="3">HYPERLIQUID OUTCOME MARKETS</text>
+<text x="60" y="294" fill="#f0f4f1" font-size="66" font-weight="bold" letter-spacing="-3">Prediction market alerts.</text>
+<text x="60" y="382" fill="#b9f227" font-size="66" font-weight="bold" letter-spacing="-3">Delivered to Telegram.</text>
+<text x="64" y="449" fill="#a5afa9" font-size="25">Your market. Your threshold. Your alert.</text>
+<path d="M64 512H1136" stroke="#242a28"/>
+<text x="64" y="568" fill="#f0f4f1" font-size="24">oddsup.xyz</text>
+<circle cx="1119" cy="559" r="7" fill="#b9f227"/></g></svg>

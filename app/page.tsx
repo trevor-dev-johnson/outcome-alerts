@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { Brand } from "@/components/brand";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "https://oddsup.xyz" },
+};
 
 export default function Home() {
   return (
@@ -12,7 +17,7 @@ export default function Home() {
           <h1>odds<span>up.</span></h1>
           <div className="landing-bottom">
             <Link href="/login" className="btn btn-primary">Get started <ArrowUpRight size={16} /></Link>
-            <p>Get notified on Telegram the moment a prediction market crosses your threshold.</p>
+            <p>Set a probability threshold for a Hyperliquid prediction market. Get notified on Telegram when it crosses.</p>
           </div>
         </div>
       </div>

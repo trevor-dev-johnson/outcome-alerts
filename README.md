@@ -74,3 +74,28 @@ An alert becomes `triggered` after a successful Telegram send. Re-arming clears 
 - Alert delivery claims are service-role-only and are cleared when a user explicitly re-arms an alert.
 - Telegram numeric user and chat IDs are the identity keys; usernames are display-only.
 - Service-role and Telegram bot secrets are never exposed through `NEXT_PUBLIC_` variables.
+
+## Brand assets and search metadata
+
+The favicon uses the existing diamond-and-signal mark (`app/icon.svg`), with ICO
+and Apple touch icon fallbacks. The link preview is the checked-in 1200 × 630 PNG
+at `public/brand/social-card-v1.png`; its editable source is alongside it. Update
+the versioned filename and both metadata references when replacing the card so
+social crawlers can fetch a fresh URL.
+
+The production origin in metadata and the sitemap is `https://oddsup.xyz`. Only
+the public homepage belongs in the sitemap today: market, alert, and settings
+routes require authentication. Login and application layouts declare `noindex`;
+robots.txt leaves those pages crawlable so crawlers can read that directive.
+API and auth endpoints are excluded from crawling. These directives do not
+replace authentication. Keep deployment-level indexing protection on previews.
+
+After deploying:
+- Check `/favicon.ico`, `/icon.svg`, `/apple-icon.png`, `/brand/social-card-v1.png`,
+  `/robots.txt`, and `/sitemap.xml` return 200 without authentication.
+- Inspect homepage HTML as Twitterbot and a regular browser for the canonical,
+  Open Graph image, and `summary_large_image` card metadata.
+- Verify domain ownership in Google Search Console, submit `/sitemap.xml`, and
+  inspect the homepage URL. Metadata alone does not establish indexing.
+- Test an actual share in X and Telegram; previously shared URLs may retain a
+  cached preview until the platform recrawls them.
