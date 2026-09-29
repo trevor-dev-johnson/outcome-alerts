@@ -1,9 +1,13 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { Brand } from "@/components/brand";
 import { hasSupabaseEnv } from "@/lib/env";
 import { LoginForm } from "./login-form";
 
-export const metadata = { title: "Sign in" };
+export const metadata: Metadata = {
+  title: "Sign in",
+  robots: { index: false, follow: false, nocache: true },
+};
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const preview = !hasSupabaseEnv();
   const { error } = await searchParams;
