@@ -33,6 +33,7 @@ Deploy the repository as a Next.js project and configure:
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `NEXT_PUBLIC_APP_URL`
 - `TELEGRAM_BOT_USERNAME`
+- `INDEXNOW_KEY` (optional; server-only key used by the explicit IndexNow submission command)
 
 `SUPABASE_SERVICE_ROLE_KEY` and `TELEGRAM_BOT_TOKEN` are not needed by the browser app. If configured for any server route, they must remain server-only.
 
@@ -57,7 +58,11 @@ pnpm test       # pure threshold crossing tests
 pnpm typecheck  # TypeScript
 pnpm lint       # ESLint
 pnpm build      # production build
+pnpm indexnow   # explicitly submit sitemap-listed public URLs to IndexNow
 ```
+
+`pnpm indexnow` submits only the public canonical URLs listed by `app/sitemap.ts`.
+It skips safely when `INDEXNOW_KEY` is absent and never runs during page requests or builds.
 
 ## Crossing semantics
 
