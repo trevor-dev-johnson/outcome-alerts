@@ -7,7 +7,7 @@ import { aboutJsonLd, homeJsonLd, SITE_URL } from "@/lib/site";
 describe("public metadata", () => {
   it("indexes only the public pages", () => {
     expect(sitemap()).toEqual([
-      expect.objectContaining({ url: SITE_URL, priority: 1 }),
+      expect.objectContaining({ url: `${SITE_URL}/`, priority: 1 }),
       expect.objectContaining({ url: `${SITE_URL}/about`, priority: 0.8 }),
     ]);
     const policy = robots();

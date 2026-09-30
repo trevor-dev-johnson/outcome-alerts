@@ -1,6 +1,6 @@
 # oddsUp
 
-> oddsUp is a web application for monitoring Hyperliquid prediction markets and receiving Telegram alerts when market probabilities cross user-defined thresholds.
+> oddsUp is a web application for monitoring Hyperliquid HIP-4 outcome markets and receiving Telegram alerts when market probabilities cross user-defined thresholds.
 
 Canonical site: https://oddsup.xyz/
 
@@ -11,7 +11,7 @@ Canonical site: https://oddsup.xyz/
 
 ## Product behavior
 
-- Browse Hyperliquid HIP-4 outcome markets after signing in.
+- Browse supported Hyperliquid HIP-4 outcome markets after signing in.
 - Create one-shot probability threshold alerts.
 - Receive triggered alerts through a connected Telegram account.
 
