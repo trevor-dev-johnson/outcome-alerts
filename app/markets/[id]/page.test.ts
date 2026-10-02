@@ -29,7 +29,7 @@ vi.mock("@/components/public-nav", () => ({
 }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("not found"); } }));
 
-import MarketDetailPage from "./page";
+import MarketDetailPage, { generateMetadata } from "./page";
 
 const market = {
   id: "42",
@@ -46,6 +46,23 @@ describe("public market alert handoff", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getMarketsWithFallback.mockResolvedValue({ markets: [market] });
+  });
+
+  it("uses the market title and default social image in share metadata", async () => {
+    const metadata = await generateMetadata({ params: Promise.resolve({ id: market.id }) });
+
+    expect(metadata.title).toEqual({ absolute: `${market.name} | OddsUp` });
+    expect(metadata.description).toContain(market.name);
+    expect(metadata.openGraph).toEqual(expect.objectContaining({
+      title: `${market.name} | OddsUp`,
+      url: "https://oddsup.xyz/markets/42",
+      images: [expect.objectContaining({ url: "https://oddsup.xyz/opengraph-image" })],
+    }));
+    expect(metadata.twitter).toEqual(expect.objectContaining({
+      card: "summary_large_image",
+      title: `${market.name} | OddsUp`,
+      images: [expect.objectContaining({ url: "https://oddsup.xyz/opengraph-image" })],
+    }));
   });
 
   it("renders a safe login link instead of an alert form for an anonymous visitor", async () => {

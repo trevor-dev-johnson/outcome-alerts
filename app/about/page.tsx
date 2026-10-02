@@ -4,7 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { PublicNav } from "@/components/public-nav";
 import { getViewer } from "@/lib/auth";
-import { aboutJsonLd, SITE_NAME, SITE_URL } from "@/lib/site";
+import { aboutJsonLd, DEFAULT_SOCIAL_IMAGE, SITE_NAME, SITE_URL } from "@/lib/site";
 import styles from "./about.module.css";
 
 const title = "About oddsUp | Hyperliquid HIP-4 Market Alerts";
@@ -23,11 +23,13 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     type: "website",
     locale: "en_US",
+    images: [DEFAULT_SOCIAL_IMAGE],
   },
   twitter: {
     card: "summary_large_image",
     title,
     description,
+    images: [DEFAULT_SOCIAL_IMAGE],
   },
 };
 

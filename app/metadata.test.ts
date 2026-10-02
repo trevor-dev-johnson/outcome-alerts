@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { metadata as rootMetadata } from "./layout";
+import { metadata as homeMetadata } from "./page";
+import { metadata as moversMetadata } from "./movers/page";
+import { metadata as aboutMetadata } from "./about/page";
 import manifest from "./manifest";
 import robots from "./robots";
 import sitemap from "./sitemap";
-import { aboutJsonLd, homeJsonLd, SITE_URL } from "@/lib/site";
+import { aboutJsonLd, DEFAULT_SOCIAL_IMAGE, homeJsonLd, MOVERS_SOCIAL_IMAGE, SITE_URL } from "@/lib/site";
 
 describe("public metadata", () => {
   it("indexes only the public pages", () => {
@@ -46,5 +50,27 @@ describe("public metadata", () => {
       isPartOf: { "@id": `${SITE_URL}/#website` },
       about: { "@id": `${SITE_URL}/#application` },
     }));
+  });
+
+  it("publishes absolute default and Movers social images", () => {
+    expect(rootMetadata.metadataBase?.toString()).toBe(`${SITE_URL}/`);
+    expect(JSON.stringify(rootMetadata)).toContain(DEFAULT_SOCIAL_IMAGE.url);
+    expect(JSON.stringify(homeMetadata)).toContain(DEFAULT_SOCIAL_IMAGE.url);
+    expect(JSON.stringify(aboutMetadata)).toContain(DEFAULT_SOCIAL_IMAGE.url);
+    expect(JSON.stringify(moversMetadata)).toContain(MOVERS_SOCIAL_IMAGE.url);
+
+    for (const metadata of [homeMetadata, aboutMetadata, moversMetadata]) {
+      expect(metadata.openGraph).toEqual(expect.objectContaining({
+        title: expect.anything(),
+        description: expect.any(String),
+        images: expect.any(Array),
+      }));
+      expect(metadata.twitter).toEqual(expect.objectContaining({
+        card: "summary_large_image",
+        title: expect.anything(),
+        description: expect.any(String),
+        images: expect.any(Array),
+      }));
+    }
   });
 });

@@ -7,7 +7,7 @@ import { getViewer } from "@/lib/auth";
 import { formatProbability } from "@/lib/format";
 import { getMoversSnapshot } from "@/lib/movers-data";
 import { MOVER_WINDOWS, parseMoverWindow } from "@/lib/movers";
-import { SITE_NAME, SITE_URL } from "@/lib/site";
+import { MOVERS_SOCIAL_IMAGE, SITE_NAME, SITE_URL } from "@/lib/site";
 
 const title = "HIP-4 Movers | OddsUp";
 const description = "See which active Hyperliquid HIP-4 outcome probabilities are moving most over 5 minutes, 1 hour, and 24 hours.";
@@ -17,8 +17,16 @@ export const metadata: Metadata = {
   title: { absolute: title },
   description,
   alternates: { canonical: "/movers" },
-  openGraph: { title, description, url: `${SITE_URL}/movers`, siteName: SITE_NAME, type: "website" },
-  twitter: { card: "summary_large_image", title, description },
+  openGraph: {
+    title,
+    description,
+    url: `${SITE_URL}/movers`,
+    siteName: SITE_NAME,
+    type: "website",
+    locale: "en_US",
+    images: [MOVERS_SOCIAL_IMAGE],
+  },
+  twitter: { card: "summary_large_image", title, description, images: [MOVERS_SOCIAL_IMAGE] },
 };
 
 function signedPoints(value: number) {

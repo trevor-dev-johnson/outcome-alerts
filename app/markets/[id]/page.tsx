@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -7,17 +8,53 @@ import { PublicNav } from "@/components/public-nav";
 import { formatProbability } from "@/lib/format";
 import { getAuthContext } from "@/lib/auth";
 import { getMarketsWithFallback } from "@/lib/hyperliquid/client";
+import { DEFAULT_SOCIAL_IMAGE, SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { robots: { index: false, follow: false, nocache: true } };
+
+const getMarket = cache(async (id: string) => {
+  const { markets } = await getMarketsWithFallback();
+  return markets.find((item) => item.id === id) ?? null;
+});
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const market = await getMarket(id);
+  const title = market ? `${market.name} | OddsUp` : "HIP-4 outcome market | OddsUp";
+  const description = market
+    ? `Follow “${market.name}” with live YES and NO probabilities, and create a Telegram threshold alert with oddsUp.`
+    : "Track a Hyperliquid HIP-4 outcome market and create a Telegram probability threshold alert with oddsUp.";
+  const url = `${SITE_URL}/markets/${encodeURIComponent(id)}`;
+
+  return {
+    title: { absolute: title },
+    description,
+    alternates: { canonical: url },
+    robots: { index: false, follow: false, nocache: true },
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: SITE_NAME,
+      type: "website",
+      locale: "en_US",
+      images: [DEFAULT_SOCIAL_IMAGE],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [DEFAULT_SOCIAL_IMAGE],
+    },
+  };
+}
 
 export default async function MarketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [{ markets }, { viewer, profile }] = await Promise.all([
-    getMarketsWithFallback(),
+  const [market, { viewer, profile }] = await Promise.all([
+    getMarket(id),
     getAuthContext(),
   ]);
-  const market = markets.find((item) => item.id === id);
   if (!market) notFound();
   const loginHref = `/login?next=${encodeURIComponent(`/markets/${market.id}`)}`;
 
