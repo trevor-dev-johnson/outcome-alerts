@@ -1,8 +1,5 @@
-import { PublicNav } from "@/components/public-nav";
-
 export default function MoversLoading() {
   return <>
-    <PublicNav current="movers" />
     <main className="app-main movers-main"><div className="shell">
       <header className="movers-head"><div><p className="eyebrow">Hyperliquid HIP-4 · Shared market history</p><h1>Movers</h1></div></header>
       <div className="movers-loading" aria-label="Loading Movers">

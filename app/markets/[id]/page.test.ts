@@ -11,8 +11,11 @@ const mocks = vi.hoisted(() => ({
       "data-telegram-connected": String(telegramConnected),
     }),
   ),
-  publicNav: vi.fn(({ authenticated }: { authenticated?: boolean }) =>
-    createElement("nav", { "data-authenticated": String(Boolean(authenticated)) }, "Public navigation"),
+  publicNav: vi.fn(({ authenticated, current }: { authenticated?: boolean; current?: string }) =>
+    createElement("nav", {
+      "data-authenticated": String(Boolean(authenticated)),
+      "data-current": current,
+    }, "Public navigation"),
   ),
 }));
 
@@ -55,6 +58,7 @@ describe("public market alert handoff", () => {
     expect(html).toContain('href="/login?next=%2Fmarkets%2F42"');
     expect(html).not.toContain('data-testid="alert-form"');
     expect(html).toContain('data-authenticated="false"');
+    expect(html).toContain('data-current="markets"');
     expect(mocks.alertForm).not.toHaveBeenCalled();
   });
 
@@ -74,5 +78,6 @@ describe("public market alert handoff", () => {
     expect(html).toContain(`data-telegram-connected="${String(connected)}"`);
     expect(html).not.toContain('href="/login?next=%2Fmarkets%2F42"');
     expect(html).toContain('data-authenticated="true"');
+    expect(html).toContain('data-current="markets"');
   });
 });

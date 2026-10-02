@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { PublicNav } from "@/components/public-nav";
+import { getViewer } from "@/lib/auth";
 import { aboutJsonLd, SITE_NAME, SITE_URL } from "@/lib/site";
 import styles from "./about.module.css";
 
@@ -10,6 +11,7 @@ const title = "About oddsUp | Hyperliquid HIP-4 Market Alerts";
 const description =
   "Learn how oddsUp monitors Hyperliquid HIP-4 outcome markets and sends Telegram alerts when market probabilities cross the thresholds you set.";
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: { absolute: title },
   description,
@@ -29,7 +31,10 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const viewer = await getViewer();
+  const authenticated = Boolean(viewer);
+
   return (
     <div className={styles.page}>
       <script
@@ -37,7 +42,7 @@ export default function AboutPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(aboutJsonLd).replace(/</g, "\\u003c") }}
       />
 
-      <PublicNav current="about" />
+      <PublicNav authenticated={authenticated} current="about" />
 
       <main className={styles.main}>
         <article>
@@ -124,7 +129,7 @@ export default function AboutPage() {
             <Link href="/">Home</Link>
             <Link href="/movers">Movers</Link>
             <Link href="/markets">Markets</Link>
-            <Link href="/login">Sign in</Link>
+            <Link href={authenticated ? "/alerts" : "/login"}>{authenticated ? "Alerts" : "Sign in"}</Link>
           </nav>
         </div>
       </footer>

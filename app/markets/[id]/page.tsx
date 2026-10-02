@@ -22,7 +22,7 @@ export default async function MarketDetailPage({ params }: { params: Promise<{ i
   const loginHref = `/login?next=${encodeURIComponent(`/markets/${market.id}`)}`;
 
   return <>
-    <PublicNav authenticated={Boolean(viewer)} />
+    <PublicNav authenticated={Boolean(viewer)} current="markets" />
     <main className="app-main"><div className="shell">
       <Link href="/movers" className="eyebrow" style={{ display:"inline-flex", gap:8, alignItems:"center" }}><ArrowLeft size={13} /> Back to movers</Link>
       <div className="detail-grid"><section><p className="eyebrow">HIP-4 outcome · #{market.id}</p><h1 className="detail-question">{market.name}</h1>

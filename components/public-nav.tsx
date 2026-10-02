@@ -6,16 +6,31 @@ export function PublicNav({
   current,
 }: {
   authenticated?: boolean;
-  current?: "movers" | "about";
+  current?: "movers" | "about" | "markets";
 }) {
+  const links = authenticated
+    ? [
+        ["/movers", "Movers"],
+        ["/markets", "Markets"],
+        ["/alerts", "Alerts"],
+        ["/settings", "Settings"],
+      ] as const
+    : [
+        ["/movers", "Movers"],
+        ["/about", "About"],
+        ["/login", "Sign in"],
+      ] as const;
+
   return (
     <header className="topbar">
       <div className="shell topbar-inner">
         <Brand />
         <nav className="nav" aria-label="Public navigation">
-          <Link href="/movers" aria-current={current === "movers" ? "page" : undefined}>Movers</Link>
-          <Link href="/about" aria-current={current === "about" ? "page" : undefined}>About</Link>
-          <Link href={authenticated ? "/markets" : "/login"}>{authenticated ? "Markets" : "Sign in"}</Link>
+          {links.map(([href, label]) => (
+            <Link key={href} href={href} aria-current={current && href === `/${current}` ? "page" : undefined}>
+              {label}
+            </Link>
+          ))}
         </nav>
       </div>
     </header>
