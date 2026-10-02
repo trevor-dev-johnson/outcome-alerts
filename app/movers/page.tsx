@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowRight, ArrowUp } from "lucide-react";
 import { MoversRefresh } from "@/components/movers-refresh";
 import { PublicNav } from "@/components/public-nav";
+import { getViewer } from "@/lib/auth";
 import { formatProbability } from "@/lib/format";
 import { getMoversSnapshot } from "@/lib/movers-data";
 import { MOVER_WINDOWS, parseMoverWindow } from "@/lib/movers";
@@ -50,10 +51,13 @@ export default async function MoversPage({
   searchParams: Promise<{ window?: string | string[] }>;
 }) {
   const window = parseMoverWindow((await searchParams).window);
-  const snapshot = await getMoversSnapshot(window);
+  const [snapshot, viewer] = await Promise.all([
+    getMoversSnapshot(window),
+    getViewer(),
+  ]);
 
   return <>
-    <PublicNav current="movers" />
+    <PublicNav authenticated={Boolean(viewer)} current="movers" />
     <main className="app-main movers-main">
       <div className="shell">
         <header className="movers-head">

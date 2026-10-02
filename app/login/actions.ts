@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { hasSupabaseEnv } from "@/lib/env";
+import { safeInternalPath } from "@/lib/safe-redirect";
 import { clearLocalAuthState } from "@/lib/supabase/auth-state";
 import { createClient } from "@/lib/supabase/server";
 
@@ -12,11 +13,20 @@ export type LoginState = { message?: string; error?: string };
 export async function sendMagicLink(_: LoginState, formData: FormData): Promise<LoginState> {
   const parsed = z.string().email().safeParse(formData.get("email"));
   if (!parsed.success) return { error: "Enter a valid email address." };
+  const requestedNext = formData.get("next");
+  const next = safeInternalPath(
+    typeof requestedNext === "string" ? requestedNext : null,
+  );
   if (!hasSupabaseEnv()) return { message: "Preview mode is active. Open Markets to explore the interface." };
   const supabase = await createClient();
   await clearLocalAuthState(supabase, await cookies());
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const { error } = await supabase.auth.signInWithOtp({ email: parsed.data, options: { emailRedirectTo: `${appUrl}/auth/callback?next=/markets` } });
+  const callbackUrl = new URL("/auth/callback", appUrl);
+  callbackUrl.searchParams.set("next", next);
+  const { error } = await supabase.auth.signInWithOtp({
+    email: parsed.data,
+    options: { emailRedirectTo: callbackUrl.toString() },
+  });
   if (error) return { error: error.message };
   return { message: "Magic link sent. Check your inbox." };
 }

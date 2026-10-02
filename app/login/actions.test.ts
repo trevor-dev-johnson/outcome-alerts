@@ -50,7 +50,40 @@ describe("sendMagicLink auth recovery", () => {
     await sendMagicLink({}, formData);
     expect(signInWithOtp).toHaveBeenCalledWith({
       email: "returning@example.com",
-      options: { emailRedirectTo: "http://localhost:3000/auth/callback?next=/markets" },
+      options: { emailRedirectTo: "http://localhost:3000/auth/callback?next=%2Fmarkets" },
+    });
+  });
+
+  it.each([
+    ["/markets/7637", "http://localhost:3000/auth/callback?next=%2Fmarkets%2F7637"],
+    ["/movers?window=5m", "http://localhost:3000/auth/callback?next=%2Fmovers%3Fwindow%3D5m"],
+  ])("preserves a safe internal destination through the magic-link callback: %s", async (next, expected) => {
+    const formData = new FormData();
+    formData.set("email", "returning@example.com");
+    formData.set("next", next);
+
+    await sendMagicLink({}, formData);
+
+    expect(signInWithOtp).toHaveBeenCalledWith({
+      email: "returning@example.com",
+      options: { emailRedirectTo: expected },
+    });
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["external", "https://example.com/phish"],
+    ["protocol-relative", "//example.com/phish"],
+  ])("falls back to Markets for a %s destination", async (_label, next) => {
+    const formData = new FormData();
+    formData.set("email", "returning@example.com");
+    if (next) formData.set("next", next);
+
+    await sendMagicLink({}, formData);
+
+    expect(signInWithOtp).toHaveBeenCalledWith({
+      email: "returning@example.com",
+      options: { emailRedirectTo: "http://localhost:3000/auth/callback?next=%2Fmarkets" },
     });
   });
 });

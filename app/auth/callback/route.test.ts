@@ -49,6 +49,34 @@ describe("auth callback recovery", () => {
   });
 
   it.each([
+    ["the original market", "/markets/7637", "https://oddsup.xyz/markets/7637"],
+    ["a Movers window", "/movers?window=5m", "https://oddsup.xyz/movers?window=5m"],
+  ])("returns to %s after a successful exchange", async (_label, next, expected) => {
+    exchangeCodeForSession.mockResolvedValue({ error: null });
+    const requestUrl = new URL("https://oddsup.xyz/auth/callback");
+    requestUrl.searchParams.set("code", "valid");
+    requestUrl.searchParams.set("next", next);
+
+    const response = await GET(new NextRequest(requestUrl));
+
+    expect(response.headers.get("location")).toBe(expected);
+  });
+
+  it.each([
+    "https://example.com/phish",
+    "//example.com/phish",
+  ])("rejects an unsafe callback destination: %s", async (next) => {
+    exchangeCodeForSession.mockResolvedValue({ error: null });
+    const requestUrl = new URL("https://oddsup.xyz/auth/callback");
+    requestUrl.searchParams.set("code", "valid");
+    requestUrl.searchParams.set("next", next);
+
+    const response = await GET(new NextRequest(requestUrl));
+
+    expect(response.headers.get("location")).toBe("https://oddsup.xyz/markets");
+  });
+
+  it.each([
     ["expired magic link", "otp_expired"],
     ["already-used magic link", "otp_expired"],
     ["wrong PKCE verifier", "bad_code_verifier"],
