@@ -1,0 +1,73 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  getAuthContext: vi.fn(),
+  getMarketsWithFallback: vi.fn(),
+  alertForm: vi.fn(({ telegramConnected }: { telegramConnected: boolean }) =>
+    createElement("div", {
+      "data-testid": "alert-form",
+      "data-telegram-connected": String(telegramConnected),
+    }),
+  ),
+}));
+
+vi.mock("@/lib/auth", () => ({ getAuthContext: mocks.getAuthContext }));
+vi.mock("@/lib/hyperliquid/client", () => ({
+  getMarketsWithFallback: mocks.getMarketsWithFallback,
+}));
+vi.mock("@/components/alert-form", () => ({ AlertForm: mocks.alertForm }));
+vi.mock("@/components/public-nav", () => ({
+  PublicNav: () => createElement("nav", null, "Public navigation"),
+}));
+vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("not found"); } }));
+
+import MarketDetailPage from "./page";
+
+const market = {
+  id: "42",
+  name: "Will this market resolve YES?",
+  description: "Test market",
+  yesCoin: "#420",
+  noCoin: "#421",
+  yesPrice: 0.6,
+  noPrice: 0.4,
+  closesAt: null,
+};
+
+describe("public market alert handoff", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getMarketsWithFallback.mockResolvedValue({ markets: [market] });
+  });
+
+  it("renders a safe login link instead of an alert form for an anonymous visitor", async () => {
+    mocks.getAuthContext.mockResolvedValue({ viewer: null, profile: null });
+
+    const page = await MarketDetailPage({ params: Promise.resolve({ id: market.id }) });
+    const html = renderToStaticMarkup(page);
+
+    expect(html).toContain("Sign in to create alert");
+    expect(html).toContain('href="/login?next=%2Fmarkets%2F42"');
+    expect(html).not.toContain('data-testid="alert-form"');
+    expect(mocks.alertForm).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [null, false],
+    ["telegram-chat", true],
+  ])("preserves the authenticated form when Telegram chat is %s", async (telegramChatId, connected) => {
+    mocks.getAuthContext.mockResolvedValue({
+      viewer: { id: "user-1", email: "owner@example.com", preview: false },
+      profile: { telegram_chat_id: telegramChatId },
+    });
+
+    const page = await MarketDetailPage({ params: Promise.resolve({ id: market.id }) });
+    const html = renderToStaticMarkup(page);
+
+    expect(html).toContain('data-testid="alert-form"');
+    expect(html).toContain(`data-telegram-connected="${String(connected)}"`);
+    expect(html).not.toContain('href="/login?next=%2Fmarkets%2F42"');
+  });
+});

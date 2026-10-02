@@ -9,13 +9,25 @@ export async function getViewer() {
   return user ? { id: user.id, email: user.email ?? "", preview: false } : null;
 }
 
-export async function getProfile(): Promise<Profile | null> {
-  const viewer = await getViewer();
-  if (!viewer) return null;
+type Viewer = NonNullable<Awaited<ReturnType<typeof getViewer>>>;
+
+async function getProfileForViewer(viewer: Viewer): Promise<Profile | null> {
   if (viewer.preview) return { id: viewer.id, telegram_user_id: null, telegram_chat_id: null, telegram_username: null, telegram_connected_at: null, created_at: new Date().toISOString() };
   const supabase = await createClient();
   const { data } = await supabase.from("profiles").select("*").eq("id", viewer.id).maybeSingle();
   return data as Profile | null;
+}
+
+export async function getAuthContext() {
+  const viewer = await getViewer();
+  return {
+    viewer,
+    profile: viewer ? await getProfileForViewer(viewer) : null,
+  };
+}
+
+export async function getProfile(): Promise<Profile | null> {
+  return (await getAuthContext()).profile;
 }
 
 export async function getAlerts(): Promise<Alert[]> {
