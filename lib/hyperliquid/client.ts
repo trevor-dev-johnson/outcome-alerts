@@ -41,7 +41,32 @@ function formatCodeDate(value?: string) {
   return new Intl.DateTimeFormat("en-US", { month:"short", day:"numeric", year:"numeric", timeZone:"UTC" }).format(new Date(Date.UTC(year,month,day)));
 }
 
-function readableName(item: OutcomeMetaItem, question?: OutcomeQuestion) {
+function isRawDescriptor(value?: string) {
+  if (!value?.includes("|")) return false;
+  return value.split("|").some((part) => /^[A-Za-z][A-Za-z0-9]*:/.test(part));
+}
+
+function sportsTotalName(descriptor: Record<string, string>) {
+  const { participantA, participantB, line, measure } = descriptor;
+  if (!participantA || !participantB || !line || !measure) return null;
+  return `Will ${participantA} vs ${participantB} go over ${line} total ${measure.toLowerCase()}?`;
+}
+
+function sportsSpreadName(descriptor: Record<string, string>) {
+  const { participantA, participantB, spread, measure } = descriptor;
+  if (!participantA || !participantB || !spread) return null;
+  const unit = measure?.toLowerCase().replace(/s$/, "") || "point";
+  return `Will ${participantA} cover a ${spread}-${unit} spread vs ${participantB}?`;
+}
+
+function firstDayMarketCapName(descriptor: Record<string, string>) {
+  const { company, marketCapThresholdB } = descriptor;
+  const threshold = Number(marketCapThresholdB);
+  if (!company || !Number.isFinite(threshold)) return null;
+  return `Will ${company}'s first-day market cap be above $${threshold.toLocaleString("en-US")}B?`;
+}
+
+export function normalizeMarketName(item: OutcomeMetaItem, question?: OutcomeQuestion) {
   const own = parseDescriptor(item.description); const parent = parseDescriptor(question?.description);
   switch (item.name) {
     case "template:priceTouch": return `Will ${own.perp} touch ${formatTarget(own.target)} by ${formatCodeDate(own.time)}?`;
@@ -54,10 +79,15 @@ function readableName(item: OutcomeMetaItem, question?: OutcomeQuestion) {
     case "template:sportsContestWinner": return `Will ${own.participantA} beat ${own.participantB}?`;
     case "template:sportsContestParticipant2": return `Will ${own.participant} win ${parent.event ?? "the match"}?`;
     case "template:sportsContestDraw2": return `Will ${parent.event ?? "the match"} end in a draw?`;
-    case "template:sportsOverUnderMarket": return `Will ${own.measure} be over ${own.line}?`;
+    case "template:sportsOverUnderMarket": return sportsTotalName(own) ?? (own.measure && own.line ? `Will ${own.measure} be over ${own.line}?` : `Outcome market #${item.outcome}`);
+    case "template:sportsTotal": return sportsTotalName(own) ?? `Outcome market #${item.outcome}`;
+    case "template:sportsSpread": return sportsSpreadName(own) ?? `Outcome market #${item.outcome}`;
+    case "template:companyIpoFirstDayMarketCap": return firstDayMarketCapName(own) ?? `Outcome market #${item.outcome}`;
     case "Recurring": if (own.class === "priceBinary") return `Will ${own.underlying} be above ${formatTarget(own.targetPrice)} on ${formatCodeDate(own.expiry)}?`; break;
   }
-  return item.name && !item.name.startsWith("template:") ? item.name : item.description || `Outcome market ${item.outcome}`;
+  if (item.name && !item.name.startsWith("template:") && item.name !== "Recurring" && !isRawDescriptor(item.name)) return item.name;
+  if (item.description && !isRawDescriptor(item.description)) return item.description;
+  return `Outcome market #${item.outcome}`;
 }
 
 function sideCoin(outcomeId: string, sideIndex: number) {
@@ -107,7 +137,7 @@ export async function fetchMarkets(): Promise<Market[]> {
       const no = mids[noCoin] ? Number(mids[noCoin]) : yes == null ? null : 1 - yes;
       return {
         id,
-        name: readableName(item, questionByOutcome.get(Number(id))),
+        name: normalizeMarketName(item, questionByOutcome.get(Number(id))),
         description: item.description,
         yesCoin,
         noCoin,

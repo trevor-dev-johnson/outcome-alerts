@@ -153,3 +153,78 @@ describe("public HIP-4 market snapshot cache", () => {
     expect(result.markets[0]).toMatchObject({ id: "1209", yesPrice: 0.34, noPrice: 0.66 });
   });
 });
+
+describe("HIP-4 market name normalization", () => {
+  it("formats the active NFL total descriptor as a natural question", async () => {
+    const { normalizeMarketName } = await importClient();
+    const name = normalizeMarketName({
+      outcome: 7048,
+      name: "template:sportsTotal",
+      description: "countedPlay:regulation time and any overtime|line:43.5|measure:points|officialSource:ESPN|participantA:Arizona Cardinals|participantB:New York Giants|resolutionDeadline:20261004-2300|scheduledStart:20261004-1700|sport:football",
+    });
+
+    expect(name).toBe("Will Arizona Cardinals vs New York Giants go over 43.5 total points?");
+  });
+
+  it("preserves existing crypto binary-price formatting", async () => {
+    const { normalizeMarketName } = await importClient();
+    expect(normalizeMarketName({
+      outcome: 1209,
+      name: "template:binaryPrice",
+      description: "perp:BTC|threshold:100000|time:20261001-0000",
+    })).toBe("Will BTC be above $100,000 on Oct 1, 2026?");
+  });
+
+  it("formats sports winner markets", async () => {
+    const { normalizeMarketName } = await importClient();
+    expect(normalizeMarketName({
+      outcome: 6740,
+      name: "template:sportsContestWinner",
+      description: "participantA:Arizona Cardinals|participantB:New York Giants",
+    })).toBe("Will Arizona Cardinals beat New York Giants?");
+  });
+
+  it("formats both legacy and current sports over-under templates", async () => {
+    const { normalizeMarketName } = await importClient();
+    const description = "participantA:Arizona Cardinals|participantB:New York Giants|line:43.5|measure:points";
+
+    expect(normalizeMarketName({ outcome: 1, name: "template:sportsOverUnderMarket", description }))
+      .toBe("Will Arizona Cardinals vs New York Giants go over 43.5 total points?");
+    expect(normalizeMarketName({ outcome: 2, name: "template:sportsTotal", description }))
+      .toBe("Will Arizona Cardinals vs New York Giants go over 43.5 total points?");
+  });
+
+  it("formats current sports spread and IPO market-cap templates", async () => {
+    const { normalizeMarketName } = await importClient();
+
+    expect(normalizeMarketName({
+      outcome: 7046,
+      name: "template:sportsSpread",
+      description: "measure:points|participantA:Arizona Cardinals|participantB:New York Giants|spread:-2.5",
+    })).toBe("Will Arizona Cardinals cover a -2.5-point spread vs New York Giants?");
+    expect(normalizeMarketName({
+      outcome: 7360,
+      name: "template:companyIpoFirstDayMarketCap",
+      description: "company:Anthropic|listingDeadline:20261231-2359|marketCapThresholdB:2000",
+    })).toBe("Will Anthropic's first-day market cap be above $2,000B?");
+  });
+
+  it("never exposes an unknown raw descriptor", async () => {
+    const { normalizeMarketName } = await importClient();
+    const name = normalizeMarketName({
+      outcome: 9999,
+      name: "template:newUnknownMarket",
+      description: "participantA:Alpha|mysteryValue:Beta|resolutionDeadline:20270101-0000",
+    });
+
+    expect(name).toBe("Outcome market #9999");
+    expect(name).not.toContain("participantA:");
+    expect(name).not.toContain("|");
+  });
+
+  it("leaves a plain human-readable upstream name unchanged", async () => {
+    const { normalizeMarketName } = await importClient();
+    expect(normalizeMarketName({ outcome: 88, name: "Will the launch happen this year?" }))
+      .toBe("Will the launch happen this year?");
+  });
+});
