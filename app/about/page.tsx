@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { PublicNav } from "@/components/public-nav";
 import { aboutJsonLd, SITE_NAME, SITE_URL } from "@/lib/site";
 import styles from "./about.module.css";
 
@@ -36,16 +37,7 @@ export default function AboutPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(aboutJsonLd).replace(/</g, "\\u003c") }}
       />
 
-      <header className="topbar">
-        <div className="shell topbar-inner">
-          <Brand />
-          <nav className="nav" aria-label="Public navigation">
-            <Link href="/">Home</Link>
-            <Link href="/about" aria-current="page">About</Link>
-            <Link href="/login">Sign in</Link>
-          </nav>
-        </div>
-      </header>
+      <PublicNav current="about" />
 
       <main className={styles.main}>
         <article>
@@ -130,6 +122,7 @@ export default function AboutPage() {
           <Brand />
           <nav aria-label="Footer navigation">
             <Link href="/">Home</Link>
+            <Link href="/movers">Movers</Link>
             <Link href="/markets">Markets</Link>
             <Link href="/login">Sign in</Link>
           </nav>

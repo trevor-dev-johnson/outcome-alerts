@@ -49,4 +49,21 @@ describe("createAlert ownership", () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ user_id: viewerId }));
     expect(insert.mock.calls[0][0].user_id).not.toBe(formData.get("user_id"));
   });
+
+  it("requires authentication only when the visitor creates an alert", async () => {
+    mocks.getViewer.mockResolvedValue(null);
+    const formData = new FormData();
+    formData.set("marketId", "42");
+    formData.set("marketName", "Public market");
+    formData.set("outcome", "YES");
+    formData.set("operator", "above");
+    formData.set("threshold", "60");
+    formData.set("currentPrice", "0.4");
+
+    await expect(createAlert({}, formData)).resolves.toEqual({
+      error: "Sign in to create an alert.",
+      needsAuth: true,
+    });
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
 });

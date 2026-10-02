@@ -9,6 +9,7 @@ describe("public metadata", () => {
     expect(sitemap()).toEqual([
       expect.objectContaining({ url: `${SITE_URL}/`, priority: 1 }),
       expect.objectContaining({ url: `${SITE_URL}/about`, priority: 0.8 }),
+      expect.objectContaining({ url: `${SITE_URL}/movers`, priority: 0.9 }),
     ]);
     const policy = robots();
     expect(policy.sitemap).toBe(`${SITE_URL}/sitemap.xml`);

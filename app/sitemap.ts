@@ -13,5 +13,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly",
       priority: 0.8,
     },
+    {
+      url: `${SITE_URL}/movers`,
+      changeFrequency: "hourly",
+      priority: 0.9,
+    },
   ];
 }

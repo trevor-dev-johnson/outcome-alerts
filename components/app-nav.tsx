@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Brand } from "./brand";
 
 const links = [
-  ["/markets", "Markets"], ["/alerts", "Alerts"], ["/settings", "Settings"],
+  ["/movers", "Movers"], ["/markets", "Markets"], ["/alerts", "Alerts"], ["/settings", "Settings"],
 ] as const;
 
 export function AppNav() {

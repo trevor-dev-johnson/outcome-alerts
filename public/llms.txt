@@ -8,10 +8,12 @@ Canonical site: https://oddsup.xyz/
 
 - Homepage: https://oddsup.xyz/
 - About oddsUp: https://oddsup.xyz/about
+- HIP-4 Movers: https://oddsup.xyz/movers
 
 ## Product behavior
 
 - Browse supported Hyperliquid HIP-4 outcome markets after signing in.
+- Discover active HIP-4 markets ranked by public probability movement.
 - Create one-shot probability threshold alerts.
 - Receive triggered alerts through a connected Telegram account.
 

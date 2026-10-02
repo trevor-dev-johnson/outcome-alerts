@@ -10,6 +10,7 @@ export type AlertFormState = {
   success?: string;
   alertId?: string;
   needsTelegram?: boolean;
+  needsAuth?: boolean;
 };
 const schema = z.object({
   marketId: z.string().min(1).max(120), marketName: z.string().min(1).max(500),
@@ -25,7 +26,7 @@ export async function createAlert(_: AlertFormState, formData: FormData): Promis
   });
   if (!parsed.success) return { error: "Check the alert values and use a threshold between 0.1% and 99.9%." };
   const viewer = await getViewer();
-  if (!viewer) return { error: "Sign in to create an alert." };
+  if (!viewer) return { error: "Sign in to create an alert.", needsAuth: true };
   if (viewer.preview) return {
     success: "Preview alert created locally. Configure Supabase to persist it.",
     alertId: "preview-alert",

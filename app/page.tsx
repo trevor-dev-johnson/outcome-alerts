@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import type { Metadata } from "next";
-import { Brand } from "@/components/brand";
+import { PublicNav } from "@/components/public-nav";
 import { homeJsonLd, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -30,7 +30,7 @@ export default function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd).replace(/</g, "\\u003c") }}
       />
-      <header><div className="shell topbar-inner"><Brand /><nav className="nav" aria-label="Public navigation"><Link href="/about">About</Link><Link href="/login">Sign in</Link></nav></div></header>
+      <PublicNav />
       <div className="landing-main shell">
         <div className="landing-copy">
           <p className="eyebrow">Hyperliquid HIP-4 · Probability monitoring</p>

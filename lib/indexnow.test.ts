@@ -24,6 +24,7 @@ describe("IndexNow public URL allowlist", () => {
     expect(getIndexablePublicUrls()).toEqual([
       "https://oddsup.xyz/",
       "https://oddsup.xyz/about",
+      "https://oddsup.xyz/movers",
     ]);
   });
 

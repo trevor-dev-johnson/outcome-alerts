@@ -27,7 +27,9 @@ export function AlertForm({ market, telegramConnected }: { market: Market; teleg
       </div></div>
       <div className="field"><label htmlFor="threshold">Threshold</label><div className="threshold-wrap"><input id="threshold" name="threshold" type="number" min="0.1" max="99.9" step="0.1" defaultValue="70" required /><span>%</span></div></div>
       {!telegramConnected && <div className="notice">Telegram isn’t connected. You can create the alert now, but connect Telegram in Settings to receive it.</div>}
-      {state.error && <p className="message danger">{state.error}</p>}{state.success && <p className="message">{state.success}</p>}
+      {state.error && <p className="message danger">{state.error}</p>}
+      {state.needsAuth && <Link className="btn btn-quiet" href={`/login?next=${encodeURIComponent(`/markets/${market.id}`)}`}>Sign in to continue</Link>}
+      {state.success && <p className="message">{state.success}</p>}
       <button className="btn btn-primary" disabled={pending}><BellRing size={15} />{pending ? "Arming…" : "Create alert"}</button>
     </form>
     {showTelegramPrompt && <div className="modal-backdrop" role="presentation">

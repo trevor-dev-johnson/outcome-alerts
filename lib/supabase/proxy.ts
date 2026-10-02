@@ -13,6 +13,16 @@ export function shouldRedirectAuthenticatedUser(pathname: string, authError: str
   return !failedAuthCallback && (pathname === "/login" || pathname === "/");
 }
 
+export function isPublicUnauthenticatedPath(pathname: string) {
+  return pathname === "/movers";
+}
+
+export function isProtectedPath(pathname: string) {
+  return pathname === "/markets" || ["/alerts", "/settings"].some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
@@ -20,6 +30,9 @@ export async function updateSession(request: NextRequest) {
   // The callback owns PKCE exchange and cleanup. Reading the old session here can
   // discard the verifier before the one-time code has a chance to use it.
   if (pathname === "/auth/callback") return response;
+  // Movers contains only shared public market data and must not depend on an
+  // authentication request succeeding.
+  if (isPublicUnauthenticatedPath(pathname)) return response;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -77,9 +90,7 @@ export async function updateSession(request: NextRequest) {
     return finishAuthTiming(response, "invalid-session");
   }
 
-  const protectedPath = ["/markets", "/alerts", "/settings"].some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
+  const protectedPath = isProtectedPath(pathname);
   if (!user && protectedPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

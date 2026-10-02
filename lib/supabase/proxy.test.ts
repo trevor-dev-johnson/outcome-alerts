@@ -5,9 +5,21 @@ const mocks = vi.hoisted(() => ({ createServerClient: vi.fn() }));
 
 vi.mock("@supabase/ssr", () => ({ createServerClient: mocks.createServerClient }));
 
-import { shouldRedirectAuthenticatedUser, updateSession } from "./proxy";
+import { isProtectedPath, isPublicUnauthenticatedPath, shouldRedirectAuthenticatedUser, updateSession } from "./proxy";
 
 describe("authenticated login routing", () => {
+  it("keeps Movers public without initializing Supabase auth", async () => {
+    expect(isPublicUnauthenticatedPath("/movers")).toBe(true);
+    const response = await updateSession(new NextRequest("https://oddsup.xyz/movers?window=1h"));
+    expect(response.headers.get("location")).toBeNull();
+    expect(mocks.createServerClient).not.toHaveBeenCalled();
+  });
+
+  it("keeps market detail readable while the market index remains protected", () => {
+    expect(isProtectedPath("/markets")).toBe(true);
+    expect(isProtectedPath("/markets/1473")).toBe(false);
+  });
+
   it("does not hide an authentication callback failure behind the previous session", () => {
     expect(shouldRedirectAuthenticatedUser("/login", "auth")).toBe(false);
     expect(shouldRedirectAuthenticatedUser("/login", "session-expired")).toBe(false);

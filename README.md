@@ -49,6 +49,11 @@ Create a second service from the same repository. `railway.json` starts `pnpm wo
 
 Only one worker replica should run for the MVP. Multi-replica delivery would require a database-backed notification claim/outbox.
 
+The worker also records one shared YES midpoint per active HIP-4 market in each
+five-minute bucket for the public Movers page. Apply the market-history migration
+before deploying a worker version that includes Movers. Observations are retained
+for 48 hours and duplicate bucket writes are ignored.
+
 ## Commands
 
 ```bash
