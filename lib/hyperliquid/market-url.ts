@@ -17,9 +17,9 @@ export function getHyperliquidMarketUrl(market: HyperliquidMarketReference, outc
 
   const expectedYesCoin = `#${encodedYesAsset}`;
   const expectedNoCoin = `#${encodedNoAsset}`;
-  if (market.yesCoin != null && market.yesCoin !== expectedYesCoin) return null;
-  if (market.noCoin != null && market.noCoin !== expectedNoCoin) return null;
-
   const coin = outcome === "YES" ? expectedYesCoin : expectedNoCoin;
+  const suppliedCoin = outcome === "YES" ? market.yesCoin : market.noCoin;
+  if (suppliedCoin != null && suppliedCoin !== coin) return null;
+
   return new URL(`/trade/${encodeURIComponent(coin)}`, HYPERLIQUID_APP_ORIGIN).toString();
 }

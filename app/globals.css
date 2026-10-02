@@ -121,7 +121,10 @@ a { color: inherit; text-decoration: none; }
 .prob-hero + .prob-hero { border-left: 1px solid var(--line); padding-left: 30px; }
 .prob-hero strong { display: block; font: 700 clamp(48px,8vw,84px)/.9 "SFMono-Regular", Consolas, monospace; letter-spacing: -.08em; margin-top: 12px; }
 .prob-hero:first-child strong { color: var(--signal); }
-.market-trade-link { margin-top: 8px; }
+.market-trade-actions { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; margin-top: 12px; }
+.market-trade-action { justify-content: space-between; min-width: 0; min-height: 50px; padding: 0 15px; border-color: #39423e; background: var(--panel-2); }
+.market-trade-action:hover { border-color: #59645f; background: #1a1f1d; }
+.market-trade-action:only-child { grid-column: 1 / -1; }
 
 .form-panel { border-top: 2px solid var(--signal); padding-top: 24px; }
 .form-panel h2 { margin: 0 0 28px; font-size: 21px; letter-spacing: -.025em; }
@@ -238,5 +241,6 @@ a { color: inherit; text-decoration: none; }
   .mover-probabilities strong { font-size:17px; }
   .mover-rank { grid-row:1 / 3; }
   .prob-hero + .prob-hero { padding-left: 18px; }
-  .market-trade-link { width: 100%; }
+  .market-trade-actions { grid-template-columns: 1fr; }
+  .market-trade-action { width: 100%; }
 }

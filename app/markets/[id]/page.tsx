@@ -58,7 +58,8 @@ export default async function MarketDetailPage({ params }: { params: Promise<{ i
   ]);
   if (!market) notFound();
   const loginHref = `/login?next=${encodeURIComponent(`/markets/${market.id}`)}`;
-  const tradeUrl = getHyperliquidMarketUrl(market);
+  const yesTradeUrl = getHyperliquidMarketUrl(market, "YES");
+  const noTradeUrl = getHyperliquidMarketUrl(market, "NO");
 
   return <>
     <PublicNav authenticated={Boolean(viewer)} current="markets" />
@@ -66,8 +67,11 @@ export default async function MarketDetailPage({ params }: { params: Promise<{ i
       <Link href="/movers" className="eyebrow" style={{ display:"inline-flex", gap:8, alignItems:"center" }}><ArrowLeft size={13} /> Back to movers</Link>
       <div className="detail-grid"><section><p className="eyebrow">HIP-4 outcome · #{market.id}</p><h1 className="detail-question">{market.name}</h1>
         <div className="prob-pair"><div className="prob-hero"><span className="eyebrow">YES probability</span><strong>{formatProbability(market.yesPrice)}</strong></div><div className="prob-hero"><span className="eyebrow">NO probability</span><strong>{formatProbability(market.noPrice)}</strong></div></div>
+        {yesTradeUrl || noTradeUrl ? <div className="market-trade-actions">
+          {yesTradeUrl ? <a className="btn market-trade-action market-trade-yes" href={yesTradeUrl} target="_blank" rel="noopener noreferrer">Trade YES on Hyperliquid <ExternalLink size={15} aria-hidden /></a> : null}
+          {noTradeUrl ? <a className="btn market-trade-action market-trade-no" href={noTradeUrl} target="_blank" rel="noopener noreferrer">Trade NO on Hyperliquid <ExternalLink size={15} aria-hidden /></a> : null}
+        </div> : null}
         <p className="muted" style={{ fontSize:12, marginTop:14 }}>Live midpoint prices from Hyperliquid. Outcome prices are displayed as implied probabilities.</p>
-        {tradeUrl ? <a className="btn btn-quiet market-trade-link" href={tradeUrl} target="_blank" rel="noopener noreferrer">Trade on Hyperliquid <ExternalLink size={14} aria-hidden /></a> : null}
       </section>{viewer
         ? <AlertForm market={market} telegramConnected={Boolean(profile?.telegram_chat_id)} />
         : <aside className="form-panel">

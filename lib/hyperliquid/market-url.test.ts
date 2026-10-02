@@ -17,6 +17,18 @@ describe("getHyperliquidMarketUrl", () => {
       .toBe("https://app.hyperliquid.xyz/trade/%2314731");
   });
 
+  it("validates each side independently", () => {
+    const invalidNo = { id: "42", yesCoin: "#420", noCoin: "#999" };
+    expect(getHyperliquidMarketUrl(invalidNo, "YES"))
+      .toBe("https://app.hyperliquid.xyz/trade/%23420");
+    expect(getHyperliquidMarketUrl(invalidNo, "NO")).toBeNull();
+
+    const invalidYes = { id: "42", yesCoin: "#999", noCoin: "#421" };
+    expect(getHyperliquidMarketUrl(invalidYes, "YES")).toBeNull();
+    expect(getHyperliquidMarketUrl(invalidYes, "NO"))
+      .toBe("https://app.hyperliquid.xyz/trade/%23421");
+  });
+
   it.each([
     { id: "-1" },
     { id: "1.5" },
@@ -24,7 +36,6 @@ describe("getHyperliquidMarketUrl", () => {
     { id: "not-a-market" },
     { id: "9007199254740992" },
     { id: "42", yesCoin: "#421" },
-    { id: "42", yesCoin: "#420", noCoin: "#999" },
     { id: "42", yesCoin: "https://evil.example" },
   ])("fails closed for malformed or mismatched market data: %o", (market) => {
     expect(getHyperliquidMarketUrl(market)).toBeNull();
