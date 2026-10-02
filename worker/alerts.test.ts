@@ -177,6 +177,14 @@ describe("AlertEvaluator delivery claims", () => {
     expect(database.claimCalls).toBe(3);
     expect(database.claims.size).toBe(1);
     expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith("123456", expect.any(String), {
+      reply_markup: {
+        inline_keyboard: [[{
+          text: "Trade on Hyperliquid",
+          url: "https://app.hyperliquid.xyz/trade/%2310",
+        }]],
+      },
+    });
     expect(database.completeCalls).toBe(1);
     expect(database.alerts[0].status).toBe("triggered");
   });
@@ -267,4 +275,3 @@ describe("AlertEvaluator baseline persistence", () => {
     expect(database.alerts[0].status).toBe("triggered");
   });
 });
-

@@ -3,6 +3,7 @@ import { Bot } from "grammy";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Alert } from "@/lib/types";
 import { formatProbability } from "@/lib/format";
+import { getHyperliquidMarketUrl } from "@/lib/hyperliquid/market-url";
 
 export function createTelegramBot(token: string, supabase: SupabaseClient) {
   const bot = new Bot(token);
@@ -25,5 +26,15 @@ export function createTelegramBot(token: string, supabase: SupabaseClient) {
 export async function sendAlert(bot: Bot, chatId: string, alert: Alert, currentPrice: number) {
   const direction = alert.operator === "above" ? "above" : "below";
   const text = ["🚨 oddsup alert", "", alert.market_name, "", `${alert.outcome} crossed ${direction} ${formatProbability(alert.threshold)}.`, `Current probability: ${formatProbability(currentPrice)}`].join("\n");
-  await bot.api.sendMessage(chatId, text);
+  const tradeUrl = getHyperliquidMarketUrl({ id: alert.market_id }, alert.outcome);
+  if (!tradeUrl) {
+    await bot.api.sendMessage(chatId, text);
+    return;
+  }
+
+  await bot.api.sendMessage(chatId, text, {
+    reply_markup: {
+      inline_keyboard: [[{ text: "Trade on Hyperliquid", url: tradeUrl }]],
+    },
+  });
 }
