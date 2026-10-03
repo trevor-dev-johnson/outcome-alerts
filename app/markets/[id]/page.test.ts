@@ -76,16 +76,18 @@ describe("public market alert handoff", () => {
     expect(html).not.toContain('data-testid="alert-form"');
     expect(html).toContain('data-authenticated="false"');
     expect(html).toContain('data-current="markets"');
-    expect(html).toContain("Trade YES on Hyperliquid");
-    expect(html).toContain("Trade NO on Hyperliquid");
+    expect(html.match(/Trade on Hyperliquid/g)).toHaveLength(1);
+    expect(html).not.toContain("market-trade-yes");
+    expect(html).not.toContain("market-trade-no");
+    expect(html).toContain("YES <span aria-hidden=\"true\">·</span> 60.0%");
+    expect(html).toContain("NO <span aria-hidden=\"true\">·</span> 40.0%");
     expect(html).toContain('href="https://app.hyperliquid.xyz/trade/%23420"');
     expect(html).toContain('href="https://app.hyperliquid.xyz/trade/%23421"');
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');
-    expect(html).toContain('class="market-trade-actions"');
-    expect(html).toContain("market-trade-yes");
-    expect(html).toContain("market-trade-no");
-    expect(html).not.toContain(">Trade on Hyperliquid<");
+    expect(html).toContain("market-trade-chooser");
+    expect(html).toContain('data-trade-outcome="YES"');
+    expect(html).toContain('data-trade-outcome="NO"');
     expect(mocks.alertForm).not.toHaveBeenCalled();
   });
 
@@ -97,10 +99,24 @@ describe("public market alert handoff", () => {
     const page = await MarketDetailPage({ params: Promise.resolve({ id: unsupportedMarket.id }) });
     const html = renderToStaticMarkup(page);
 
-    expect(html).toContain("Trade YES on Hyperliquid");
+    expect(html).toContain("Trade on Hyperliquid");
     expect(html).toContain('href="https://app.hyperliquid.xyz/trade/%23430"');
-    expect(html).not.toContain("Trade NO on Hyperliquid");
+    expect(html).toContain('data-trade-outcome="YES"');
+    expect(html).not.toContain('data-trade-outcome="NO"');
     expect(html).not.toContain("%23431");
+    expect(html).toContain("Sign in to create alert");
+  });
+
+  it("does not render a trade control when neither side is valid", async () => {
+    const unsupportedMarket = { ...market, id: "44", yesCoin: "#999", noCoin: "#998" };
+    mocks.getMarketsWithFallback.mockResolvedValue({ markets: [unsupportedMarket] });
+    mocks.getAuthContext.mockResolvedValue({ viewer: null, profile: null });
+
+    const page = await MarketDetailPage({ params: Promise.resolve({ id: unsupportedMarket.id }) });
+    const html = renderToStaticMarkup(page);
+
+    expect(html).not.toContain("Trade on Hyperliquid");
+    expect(html).not.toContain("market-trade-chooser");
     expect(html).toContain("Sign in to create alert");
   });
 
@@ -121,8 +137,9 @@ describe("public market alert handoff", () => {
     expect(html).not.toContain('href="/login?next=%2Fmarkets%2F42"');
     expect(html).toContain('data-authenticated="true"');
     expect(html).toContain('data-current="markets"');
-    expect(html).toContain("Trade YES on Hyperliquid");
-    expect(html).toContain("Trade NO on Hyperliquid");
+    expect(html.match(/Trade on Hyperliquid/g)).toHaveLength(1);
+    expect(html).toContain('data-trade-outcome="YES"');
+    expect(html).toContain('data-trade-outcome="NO"');
     expect(html).toContain('href="https://app.hyperliquid.xyz/trade/%23420"');
     expect(html).toContain('href="https://app.hyperliquid.xyz/trade/%23421"');
   });
