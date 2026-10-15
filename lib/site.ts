@@ -1,8 +1,8 @@
 export const SITE_URL = "https://oddsup.xyz";
 export const SITE_NAME = "oddsUp";
-export const SITE_TITLE = "oddsUp — Prediction market alerts";
+export const SITE_TITLE = "oddsUp — Telegram alerts for Hyperliquid HIP-4 markets";
 export const SITE_DESCRIPTION =
-  "Monitor Hyperliquid prediction markets and receive Telegram alerts when market probabilities cross your thresholds.";
+  "Monitor Hyperliquid HIP-4 outcome markets and receive Telegram alerts when probabilities cross your thresholds.";
 export const DEFAULT_SOCIAL_IMAGE = {
   url: `${SITE_URL}/opengraph-image`,
   width: 1200,
@@ -24,7 +24,7 @@ export const homeJsonLd = {
     {
       "@type": "WebSite",
       "@id": `${SITE_URL}/#website`,
-      url: SITE_URL,
+      url: `${SITE_URL}/`,
       name: SITE_NAME,
       description: SITE_DESCRIPTION,
       inLanguage: "en",
@@ -32,14 +32,14 @@ export const homeJsonLd = {
     {
       "@type": "WebApplication",
       "@id": `${SITE_URL}/#application`,
-      url: SITE_URL,
+      url: `${SITE_URL}/`,
       name: SITE_NAME,
       description: SITE_DESCRIPTION,
       applicationCategory: "FinanceApplication",
       operatingSystem: "Any",
       browserRequirements: "Requires a modern web browser",
       featureList: [
-        "Monitor Hyperliquid prediction markets",
+        "Monitor Hyperliquid HIP-4 outcome markets",
         "Create probability threshold alerts",
         "Receive alert notifications on Telegram",
       ],

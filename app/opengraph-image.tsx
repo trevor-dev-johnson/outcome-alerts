@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "oddsUp — Prediction market alerts";
+export const alt = "oddsUp — Telegram probability alerts for Hyperliquid HIP-4 outcome markets";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -51,13 +51,13 @@ export default function OpenGraphImage() {
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ color: "#8e9994", fontSize: 22, fontWeight: 700, letterSpacing: "4px", textTransform: "uppercase" }}>
-            Prediction market alerts
+            Telegram probability alerts
           </div>
           <div style={{ display: "flex", alignItems: "baseline", fontSize: 116, fontWeight: 850, letterSpacing: "-8px", marginTop: 14 }}>
             odds<span style={{ color: "#b9f227" }}>Up.</span>
           </div>
           <div style={{ color: "#aab3af", fontSize: 28, lineHeight: 1.4, maxWidth: 780, marginTop: 18 }}>
-            Monitor Hyperliquid markets. Get notified when probability crosses your threshold.
+            Monitor Hyperliquid HIP-4 outcome markets. Get a Telegram alert when probability crosses your threshold.
           </div>
         </div>
       </div>

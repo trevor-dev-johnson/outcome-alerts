@@ -6,7 +6,7 @@ import { metadata as aboutMetadata } from "./about/page";
 import manifest from "./manifest";
 import robots from "./robots";
 import sitemap from "./sitemap";
-import { aboutJsonLd, DEFAULT_SOCIAL_IMAGE, homeJsonLd, MOVERS_SOCIAL_IMAGE, SITE_URL } from "@/lib/site";
+import { aboutJsonLd, DEFAULT_SOCIAL_IMAGE, homeJsonLd, MOVERS_SOCIAL_IMAGE, SITE_DESCRIPTION, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 describe("public metadata", () => {
   it("indexes only the public pages", () => {
@@ -19,9 +19,18 @@ describe("public metadata", () => {
     expect(policy.sitemap).toBe(`${SITE_URL}/sitemap.xml`);
     expect(policy.rules).toEqual(expect.objectContaining({
       userAgent: "*",
-      allow: "/",
+      allow: expect.arrayContaining(["/", "/markets/"]),
       disallow: expect.arrayContaining(["/alerts", "/login", "/markets", "/settings"]),
     }));
+  });
+
+  it("uses one canonical homepage URL and describes the actual product", () => {
+    expect(homeMetadata.alternates).toEqual({ canonical: `${SITE_URL}/` });
+    expect(homeMetadata.openGraph).toEqual(expect.objectContaining({ url: `${SITE_URL}/` }));
+    expect(SITE_TITLE).toContain("Hyperliquid HIP-4");
+    expect(SITE_DESCRIPTION).toContain("Hyperliquid HIP-4 outcome markets");
+    expect(SITE_DESCRIPTION).toContain("Telegram alerts");
+    expect(JSON.stringify(homeJsonLd)).toContain("Hyperliquid HIP-4 outcome markets");
   });
 
   it("provides installable application identity", () => {

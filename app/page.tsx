@@ -7,11 +7,11 @@ import { DEFAULT_SOCIAL_IMAGE, homeJsonLd, SITE_DESCRIPTION, SITE_NAME, SITE_TIT
 export const metadata: Metadata = {
   title: { absolute: SITE_TITLE },
   description: SITE_DESCRIPTION,
-  alternates: { canonical: "/" },
+  alternates: { canonical: `${SITE_URL}/` },
   openGraph: {
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
-    url: SITE_URL,
+    url: `${SITE_URL}/`,
     siteName: SITE_NAME,
     type: "website",
     locale: "en_US",
@@ -39,7 +39,7 @@ export default function Home() {
           <h1>odds<span>up.</span></h1>
           <div className="landing-bottom">
             <Link href="/login" className="btn btn-primary">Get started <ArrowUpRight size={16} /></Link>
-            <p>Monitor prediction markets and get a Telegram alert the moment probability crosses your threshold.</p>
+            <p>Monitor Hyperliquid HIP-4 outcome markets and get a Telegram alert when probability crosses your threshold.</p>
           </div>
         </div>
       </div>
