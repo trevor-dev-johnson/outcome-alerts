@@ -26,7 +26,9 @@ export function isSupabaseAuthCookie(name: string, supabaseUrl?: string) {
 export function isSupabaseSessionCookie(name: string, supabaseUrl?: string) {
   const storageKey = supabaseAuthStorageKey(supabaseUrl);
   if (!storageKey) return false;
-  return name === storageKey || /^\.\d+$/.test(name.slice(storageKey.length));
+  return name === storageKey || (
+    name.startsWith(`${storageKey}.`) && /^\.\d+$/.test(name.slice(storageKey.length))
+  );
 }
 
 export function hasSupabaseAuthCookies(cookies: Cookie[], supabaseUrl?: string) {
@@ -70,6 +72,8 @@ export function expireSupabasePkceVerifierCookies(
   const storageKey = supabaseAuthStorageKey(supabaseUrl);
   if (!storageKey) return [];
   const validFlowId = flowId && /^[a-z0-9_-]{8,64}$/i.test(flowId) ? flowId : null;
+  // An explicitly invalid flow must not fall back to another login's alias.
+  if (flowId !== null && !validFlowId) return [];
   const verifierKey = validFlowId
     ? `${storageKey}-flow-${validFlowId}-code-verifier`
     : `${storageKey}-code-verifier`;

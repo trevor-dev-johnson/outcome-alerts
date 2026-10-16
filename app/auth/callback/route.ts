@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { safeInternalPath } from "@/lib/safe-redirect";
 import {
-  clearLocalAuthState,
+  expireSupabaseSessionCookies,
   expireSupabasePkceVerifierCookies,
   isInvalidStoredAuthError,
   safeAuthError,
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const code = url.searchParams.get("code");
   const flowId = url.searchParams.get("sb_flow_id");
   const next = safeInternalPath(url.searchParams.get("next"));
-  const supabase = await createClient({ skipAuthInitialization: true });
+  const supabase = await createClient({ skipAuthInitialization: true, pkceExchangeOnly: true });
   const cookieStore = await cookies();
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(
@@ -32,17 +32,22 @@ export async function GET(request: NextRequest) {
   );
 
   // A stale/reused link can arrive after another tab has already established a
-  // newer valid session. Preserve that session; only purge state that is absent
-  // or independently proven invalid. The failed flow's verifier is removed by
-  // exchangeCodeForSession without weakening PKCE validation.
+  // newer valid session. Check it with a separate, session-only cookie adapter:
+  // SDK invalid-session teardown must not remove another pending PKCE flow.
+  // Do not sign out here; only remove independently invalid session cookies.
+  const sessionClient = await createClient({ skipAuthInitialization: true, sessionCookiesOnly: true });
+  const expireInvalidSession = () => expireSupabaseSessionCookies(
+    cookieStore.getAll(),
+    (name, value, options) => cookieStore.set(name, value, options),
+  );
   try {
-    const { data: { user }, error: sessionError } = await supabase.auth.getUser();
-    if (!user && (!sessionError || isInvalidStoredAuthError(sessionError))) {
-      await clearLocalAuthState(supabase, cookieStore);
+    const { data: { user }, error: sessionError } = await sessionClient.auth.getUser();
+    if (!user && sessionError && isInvalidStoredAuthError(sessionError)) {
+      expireInvalidSession();
     }
   } catch (sessionError) {
     if (isInvalidStoredAuthError(sessionError)) {
-      await clearLocalAuthState(supabase, cookieStore);
+      expireInvalidSession();
     }
   }
   return NextResponse.redirect(new URL("/login?error=session-expired", url.origin));

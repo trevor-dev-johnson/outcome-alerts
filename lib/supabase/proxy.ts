@@ -4,6 +4,7 @@ import {
   expireSupabaseSessionCookies,
   hasSupabaseSessionCookies,
   isInvalidStoredAuthError,
+  isSupabaseSessionCookie,
   safeAuthError,
 } from "@/lib/supabase/auth-state";
 
@@ -39,8 +40,10 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
       cookies: {
-        getAll: () => request.cookies.getAll(),
+        // Auth refresh/teardown must never own pending login verifiers.
+        getAll: () => request.cookies.getAll().filter(({ name }) => isSupabaseSessionCookie(name)),
         setAll(cookiesToSet) {
+          cookiesToSet = cookiesToSet.filter(({ name }) => isSupabaseSessionCookie(name));
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));

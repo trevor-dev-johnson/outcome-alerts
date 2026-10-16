@@ -32,6 +32,20 @@ describe("Supabase browser auth state", () => {
     expect(isSupabaseSessionCookie("sb-project-ref-auth-token-flow-a1b2c3d4-code-verifier", supabaseUrl)).toBe(false);
   });
 
+  it.each([
+    "sb-another-ref-auth-token.0", // Same length as this project's key.
+    "sb-project-ref-auth-token-extra.0",
+    "sb-project-ref-auth-token.",
+    "sb-project-ref-auth-token.-1",
+    "sb-project-ref-auth-token.1.0",
+    "sb-project-ref-auth-token.0junk",
+    "sb-project-ref-auth-token-code-verifier.0",
+    "sb-project-ref-auth-token-flow-aaaaaaaa-code-verifier.0",
+    "theme",
+  ])("does not treat %s as this project's session", (name) => {
+    expect(isSupabaseSessionCookie(name, supabaseUrl)).toBe(false);
+  });
+
   it("expires session chunks without removing simultaneous pending PKCE flows", () => {
     const setCookie = vi.fn();
     const cookies = [
@@ -40,6 +54,7 @@ describe("Supabase browser auth state", () => {
       { name: "sb-project-ref-auth-token-flow-bbbbbbbb-code-verifier", value: "second" },
       { name: "sb-project-ref-auth-token-flows-code-verifier", value: "index" },
       { name: "sb-project-ref-auth-token-code-verifier", value: "legacy" },
+      { name: "sb-another-ref-auth-token.0", value: "other-project" },
     ];
 
     expect(hasSupabaseSessionCookies(cookies, supabaseUrl)).toBe(true);
@@ -103,6 +118,7 @@ describe("Supabase browser auth state", () => {
       getAll: () => [
         { name: "sb-project-ref-auth-token", value: "stale" },
         { name: "unrelated", value: "keep" },
+        { name: "sb-another-ref-auth-token.0", value: "keep" },
       ],
       set,
     };
@@ -113,6 +129,7 @@ describe("Supabase browser auth state", () => {
     expect(signOut).toHaveBeenCalledWith({ scope: "local" });
     expect(set).toHaveBeenCalledWith("sb-project-ref-auth-token", "", { maxAge: 0, path: "/" });
     expect(set).not.toHaveBeenCalledWith("unrelated", expect.anything(), expect.anything());
+    expect(set).not.toHaveBeenCalledWith("sb-another-ref-auth-token.0", expect.anything(), expect.anything());
   });
 
   it("classifies invalid sessions separately from transient Auth failures", () => {

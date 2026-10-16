@@ -23,7 +23,8 @@ export async function connectTelegram() {
 export async function disconnectTelegram() {
   const viewer = await getViewer(); if (!viewer || viewer.preview) return;
   const supabase = await createClient();
-  await supabase.from("profiles").update({ telegram_user_id:null, telegram_chat_id:null, telegram_username:null, telegram_connected_at:null }).eq("id", viewer.id);
+  const { data, error } = await supabase.rpc("disconnect_telegram");
+  if (error || data !== true) redirect("/settings?error=telegram-disconnect");
   revalidatePath("/settings");
 }
 
