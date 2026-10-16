@@ -7,6 +7,7 @@ export const OBSERVATION_BUCKET_MS = 5 * 60_000;
 export const OBSERVATION_RETENTION_MS = 48 * 60 * 60_000;
 export const CURRENT_OBSERVATION_MAX_AGE_MS = 60_000;
 export const MAX_MOVER_MARKET_IDS = 300;
+export const MAX_MOVER_TOTAL_MARKET_IDS = 900;
 
 export const MOVER_WINDOW_RULES: Record<MoverWindow, {
   durationMs: number;

@@ -48,7 +48,12 @@ vi.mock("@/lib/hyperliquid/client", () => ({
 vi.mock("@/lib/env", () => ({ hasSupabaseEnv: mocks.hasSupabaseEnv }));
 vi.mock("@/lib/supabase/public", () => ({ createPublicClient: mocks.createPublicClient }));
 
-import { getMoversSnapshot, MOVERS_HISTORY_CACHE_SECONDS } from "./movers-data";
+import {
+  getMoversSnapshot,
+  MOVERS_HISTORY_CACHE_SECONDS,
+  MOVERS_HISTORY_MAX_CONCURRENCY,
+} from "./movers-data";
+import { MAX_MOVER_TOTAL_MARKET_IDS, type MoverWindow } from "./movers";
 
 const FETCHED_AT = "2026-09-30T12:00:00.000Z";
 
@@ -66,6 +71,33 @@ function marketSnapshot(source: "live" | "stale" | "preview" = "live") {
       closesAt: "2026-10-01T00:00:00.000Z",
     }],
   };
+}
+
+function marketSnapshotWithCount(count: number) {
+  return {
+    ...marketSnapshot(),
+    markets: Array.from({ length: count }, (_, index) => {
+      const id = String(index + 1).padStart(4, "0");
+      return {
+        ...marketSnapshot().markets[0],
+        id,
+        name: `Market ${id}`,
+        yesPrice: index === count - 1 ? 0.99 : 0.6,
+      };
+    }),
+  };
+}
+
+function historyForRpcArgs(args: {
+  p_market_ids: string[];
+  p_target_at: string;
+}) {
+  return args.p_market_ids.map((marketId) => ({
+    market_id: marketId,
+    bucket_at: args.p_target_at,
+    observed_at: args.p_target_at,
+    yes_probability: marketId === "0329" ? 0.1 : 0.5,
+  }));
 }
 
 describe("public Movers data access", () => {
@@ -146,14 +178,10 @@ describe("public Movers data access", () => {
     expect(mocks.createPublicClient).not.toHaveBeenCalled();
   });
 
-  it("fails closed before RPC when the active universe exceeds the public bound", async () => {
-    mocks.getMarketsWithFallback.mockResolvedValue({
-      ...marketSnapshot(),
-      markets: Array.from({ length: 301 }, (_, index) => ({
-        ...marketSnapshot().markets[0],
-        id: String(index + 1),
-      })),
-    });
+  it("fails closed before RPC when the active universe exceeds the bounded total", async () => {
+    mocks.getMarketsWithFallback.mockResolvedValue(
+      marketSnapshotWithCount(MAX_MOVER_TOTAL_MARKET_IDS + 1),
+    );
     const rpc = vi.fn();
     mocks.createPublicClient.mockReturnValue({ rpc });
 
@@ -161,10 +189,108 @@ describe("public Movers data access", () => {
 
     expect(result).toMatchObject({
       state: "unavailable",
-      eligibleMarketCount: 301,
-      insufficientHistoryCount: 301,
+      eligibleMarketCount: MAX_MOVER_TOTAL_MARKET_IDS + 1,
+      insufficientHistoryCount: MAX_MOVER_TOTAL_MARKET_IDS + 1,
     });
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [299, [299]],
+    [300, [300]],
+    [301, [300, 1]],
+    [329, [300, 29]],
+    [600, [300, 300]],
+  ] as const)("batches %i markets within the existing RPC bound", async (count, batchSizes) => {
+    mocks.getMarketsWithFallback.mockResolvedValue(marketSnapshotWithCount(count));
+    const rpc = vi.fn(async (_name: string, args: {
+      p_market_ids: string[];
+      p_target_at: string;
+    }) => ({ data: historyForRpcArgs(args), error: null }));
+    mocks.createPublicClient.mockReturnValue({ rpc });
+
+    const result = await getMoversSnapshot("1h", Date.parse(FETCHED_AT));
+    const calls = rpc.mock.calls as unknown as Array<[string, { p_market_ids: string[] }]>;
+    const requestedIds = calls.flatMap((call) => call[1].p_market_ids);
+
+    expect(calls.map((call) => call[1].p_market_ids.length)).toEqual(batchSizes);
+    expect(requestedIds).toEqual([...requestedIds].sort((a, b) => a.localeCompare(b)));
+    expect(new Set(requestedIds).size).toBe(count);
+    expect(result).toMatchObject({
+      state: "live",
+      eligibleMarketCount: count,
+      insufficientHistoryCount: 0,
+    });
+    expect(result.movers).toHaveLength(count);
+    expect(new Set(result.movers.map((mover) => mover.marketId)).size).toBe(count);
+  });
+
+  it.each(["5m", "1h", "24h"] as const)(
+    "calculates globally ranked %s Movers across a 600-market batched universe",
+    async (window: MoverWindow) => {
+      mocks.getMarketsWithFallback.mockResolvedValue(marketSnapshotWithCount(600));
+      const rpc = vi.fn(async (_name: string, args: {
+        p_market_ids: string[];
+        p_target_at: string;
+      }) => ({ data: historyForRpcArgs(args), error: null }));
+      mocks.createPublicClient.mockReturnValue({ rpc });
+
+      const result = await getMoversSnapshot(window, Date.parse(FETCHED_AT));
+
+      expect(result.state).toBe("live");
+      expect(result.movers).toHaveLength(600);
+      expect(result.movers[0]).toMatchObject({ marketId: "0329", window });
+      expect(new Set(result.movers.map((mover) => mover.marketId)).size).toBe(600);
+    },
+  );
+
+  it("fails the whole snapshot closed when any required batch fails", async () => {
+    mocks.getMarketsWithFallback.mockResolvedValue(marketSnapshotWithCount(329));
+    let call = 0;
+    const rpc = vi.fn(async (_name: string, args: {
+      p_market_ids: string[];
+      p_target_at: string;
+    }) => {
+      call += 1;
+      return call === 2
+        ? { data: null, error: { code: "PGRST500" } }
+        : { data: historyForRpcArgs(args), error: null };
+    });
+    mocks.createPublicClient.mockReturnValue({ rpc });
+
+    const result = await getMoversSnapshot("1h", Date.parse(FETCHED_AT));
+
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      state: "unavailable",
+      movers: [],
+      eligibleMarketCount: 329,
+      insufficientHistoryCount: 329,
+    });
+  });
+
+  it("bounds concurrent RPC batches", async () => {
+    mocks.getMarketsWithFallback.mockResolvedValue(
+      marketSnapshotWithCount(MAX_MOVER_TOTAL_MARKET_IDS),
+    );
+    let active = 0;
+    let maxActive = 0;
+    const rpc = vi.fn(async (_name: string, args: {
+      p_market_ids: string[];
+      p_target_at: string;
+    }) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await Promise.resolve();
+      active -= 1;
+      return { data: historyForRpcArgs(args), error: null };
+    });
+    mocks.createPublicClient.mockReturnValue({ rpc });
+
+    await getMoversSnapshot("1h", Date.parse(FETCHED_AT));
+
+    expect(MOVERS_HISTORY_MAX_CONCURRENCY).toBe(2);
+    expect(maxActive).toBeLessThanOrEqual(MOVERS_HISTORY_MAX_CONCURRENCY);
   });
 
   it("reuses the shared history result for repeated requests in the same window", async () => {
