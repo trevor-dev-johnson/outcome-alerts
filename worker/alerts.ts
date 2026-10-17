@@ -82,13 +82,17 @@ export class AlertEvaluator {
     for (const alert of alerts) {
       if (claimedIds.has(alert.id)) continue;
       const existing = this.alerts.get(alert.id);
+      const sameGeneration = existing?.arm_generation === alert.arm_generation;
       next.set(alert.id, {
         ...alert,
-        last_observed_price: existing?.last_observed_price ?? alert.last_observed_price,
+        last_observed_price: sameGeneration
+          ? existing.last_observed_price
+          : alert.last_observed_price,
       });
       nextPersistedBaselines.set(alert.id, alert.last_observed_price);
-      if (!this.lastCheckpoint.has(alert.id)) {
+      if (!sameGeneration) {
         this.lastCheckpoint.set(alert.id, alert.last_observed_price == null ? 0 : this.now());
+        this.nextBaselineAttempt.delete(alert.id);
       }
     }
 
@@ -112,8 +116,9 @@ export class AlertEvaluator {
       const claimId = this.createClaimId();
       try {
         const chatId = await this.request("alert_delivery_claim", () =>
-          this.supabase.rpc("claim_alert_delivery", {
+          this.supabase.rpc("claim_alert_delivery_for_generation", {
             p_alert_id: alert.id,
+            p_arm_generation: alert.arm_generation,
             p_claim_id: claimId,
             p_current_price: currentPrice,
           }),
@@ -123,8 +128,9 @@ export class AlertEvaluator {
           this.alerts.delete(alert.id);
           await sendAlert(this.bot, String(chatId), alert, currentPrice);
           const completed = await this.request("alert_delivery_complete", () =>
-            this.supabase.rpc("complete_alert_delivery", {
+            this.supabase.rpc("complete_alert_delivery_for_generation", {
               p_alert_id: alert.id,
+              p_arm_generation: alert.arm_generation,
               p_claim_id: claimId,
             }),
           );
@@ -155,7 +161,12 @@ export class AlertEvaluator {
 
     try {
       await this.request("alert_baseline_update", () =>
-        this.supabase.from("alerts").update({ last_observed_price:currentPrice }).eq("id",alert.id).eq("status","active"),
+        this.supabase
+          .from("alerts")
+          .update({ last_observed_price:currentPrice })
+          .eq("id",alert.id)
+          .eq("status","active")
+          .eq("arm_generation", alert.arm_generation),
       );
       this.persistedBaselines.set(alert.id, currentPrice);
       this.lastCheckpoint.set(alert.id, now);

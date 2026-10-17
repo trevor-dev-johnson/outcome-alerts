@@ -30,6 +30,7 @@ export interface Alert {
   operator: Operator;
   threshold: number;
   status: AlertStatus;
+  arm_generation: number;
   last_observed_price: number | null;
   triggered_at: string | null;
   created_at: string;

@@ -10,7 +10,12 @@ async function updateAlert(formData: FormData, status: AlertStatus, reset = fals
   const id = String(formData.get("id") ?? ""); if (!id) return;
   const supabase = await createClient();
   const update: Record<string, unknown> = { status };
-  if (reset) { update.triggered_at = null; update.last_observed_price = null; }
+  if (reset) {
+    update.triggered_at = null;
+    update.last_observed_price = null;
+    // The database trigger turns any changed value into the next monotonic generation.
+    update.arm_generation = 0;
+  }
   await supabase.from("alerts").update(update).eq("id", id).eq("user_id", viewer.id);
   revalidatePath("/alerts");
 }

@@ -13,6 +13,7 @@ function alert(marketId: string, outcome: Alert["outcome"] = "YES"): Alert {
     operator: "above",
     threshold: 0.5,
     status: "active",
+    arm_generation: 1,
     last_observed_price: 0.4,
     triggered_at: null,
     created_at: new Date(0).toISOString(),

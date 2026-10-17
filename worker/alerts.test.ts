@@ -5,7 +5,7 @@ import type { Alert } from "@/lib/types";
 import { AlertEvaluator } from "./alerts";
 
 type QueryResult<T> = { data: T; error: unknown };
-type Claim = { claimId: string; chatId: string; crossingPrice: number; completed: boolean };
+type Claim = { claimId: string; armGeneration: number; chatId: string; crossingPrice: number; completed: boolean };
 
 class FakeQuery implements PromiseLike<QueryResult<unknown>> {
   private action: "select" | "update" = "select";
@@ -38,6 +38,8 @@ class FakeQuery implements PromiseLike<QueryResult<unknown>> {
 
     if (this.table === "alerts" && this.action === "update") {
       this.database.baselineUpdateCalls += 1;
+      this.database.beforeAlertUpdate?.();
+      this.database.beforeAlertUpdate = null;
       for (const alert of this.database.alerts) {
         if ([...this.filters].every(([column, value]) => alert[column as keyof Alert] === value)) {
           Object.assign(alert, this.values);
@@ -65,22 +67,36 @@ class FakeSupabase {
   claimResponseTimeoutsRemaining = 0;
   completionFailuresRemaining = 0;
   telegramChatId: string | null = "123456";
+  beforeAlertUpdate: (() => void) | null = null;
 
   constructor(readonly alerts: Alert[]) {}
 
   from(table: string) { return new FakeQuery(this, table); }
 
   async rpc(name: string, params: Record<string, unknown>): Promise<QueryResult<unknown>> {
-    if (name === "claim_alert_delivery") {
+    if (name === "claim_alert_delivery_for_generation") {
       this.claimCalls += 1;
       const alertId = String(params.p_alert_id);
+      const armGeneration = Number(params.p_arm_generation);
       const claimId = String(params.p_claim_id);
       const existing = this.claims.get(alertId);
-      if (existing) return { data: existing.claimId === claimId ? existing.chatId : null, error: null };
-      const alert = this.alerts.find((candidate) => candidate.id === alertId && candidate.status === "active");
+      if (existing) {
+        return {
+          data: existing.claimId === claimId && existing.armGeneration === armGeneration
+            ? existing.chatId
+            : null,
+          error: null,
+        };
+      }
+      const alert = this.alerts.find((candidate) =>
+        candidate.id === alertId
+        && candidate.status === "active"
+        && candidate.arm_generation === armGeneration,
+      );
       if (!alert || !this.telegramChatId) return { data: null, error: null };
       this.claims.set(alertId, {
         claimId,
+        armGeneration,
         chatId: this.telegramChatId,
         crossingPrice: Number(params.p_current_price),
         completed: false,
@@ -92,17 +108,24 @@ class FakeSupabase {
       return { data: this.telegramChatId, error: null };
     }
 
-    if (name === "complete_alert_delivery") {
+    if (name === "complete_alert_delivery_for_generation") {
       this.completeCalls += 1;
       if (this.completionFailuresRemaining > 0) {
         this.completionFailuresRemaining -= 1;
         return { data: null, error: { status: 504, message: "Gateway Timeout" } };
       }
       const alertId = String(params.p_alert_id);
+      const armGeneration = Number(params.p_arm_generation);
       const claim = this.claims.get(alertId);
-      if (!claim || claim.claimId !== String(params.p_claim_id)) return { data: false, error: null };
+      if (
+        !claim
+        || claim.claimId !== String(params.p_claim_id)
+        || claim.armGeneration !== armGeneration
+      ) return { data: false, error: null };
       if (!claim.completed) {
-        const alert = this.alerts.find((candidate) => candidate.id === alertId);
+        const alert = this.alerts.find((candidate) =>
+          candidate.id === alertId && candidate.arm_generation === armGeneration,
+        );
         if (!alert || alert.status !== "active") return { data: false, error: null };
         alert.status = "triggered";
         alert.triggered_at = new Date().toISOString();
@@ -113,6 +136,16 @@ class FakeSupabase {
     }
 
     throw new Error(`Unsupported fake RPC: ${name}`);
+  }
+
+  rearmAlert(id = "alert-1") {
+    const target = this.alerts.find((candidate) => candidate.id === id);
+    if (!target) throw new Error(`Missing alert ${id}`);
+    target.status = "active";
+    target.arm_generation += 1;
+    target.triggered_at = null;
+    target.last_observed_price = null;
+    this.claims.delete(id);
   }
 }
 
@@ -126,6 +159,7 @@ function alert(overrides: Partial<Alert> = {}): Alert {
     operator: "above",
     threshold: 0.5,
     status: "active",
+    arm_generation: 1,
     last_observed_price: 0.4,
     triggered_at: null,
     created_at: new Date(0).toISOString(),
@@ -235,6 +269,56 @@ describe("AlertEvaluator delivery claims", () => {
 });
 
 describe("AlertEvaluator baseline persistence", () => {
+  it("resets its in-memory baseline when disable and re-enable happen between syncs", async () => {
+    const database = new FakeSupabase([alert()]);
+    const { evaluator, sendMessage } = setup(database);
+    await evaluator.refresh();
+
+    database.alerts[0].status = "disabled";
+    database.rearmAlert();
+    await evaluator.refresh();
+    await evaluator.onPrice("#10", 0.6);
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(database.claimCalls).toBe(0);
+    expect(database.alerts[0].last_observed_price).toBe(0.6);
+
+    await evaluator.onPrice("#10", 0.4);
+    await evaluator.onPrice("#10", 0.6);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects stale-generation claims before the next worker synchronization", async () => {
+    const database = new FakeSupabase([alert()]);
+    const { evaluator, sendMessage } = setup(database);
+    await evaluator.refresh();
+
+    database.rearmAlert();
+    await evaluator.onPrice("#10", 0.6);
+
+    expect(database.claimCalls).toBe(1);
+    expect(database.claims.size).toBe(0);
+    expect(database.alerts[0].last_observed_price).toBeNull();
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    await evaluator.refresh();
+    await evaluator.onPrice("#10", 0.6);
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not let a concurrent stale baseline write overwrite a newly armed generation", async () => {
+    const database = new FakeSupabase([alert({ threshold: 0.7 })]);
+    database.telegramChatId = null;
+    const { evaluator } = setup(database);
+    await evaluator.refresh();
+    database.beforeAlertUpdate = () => database.rearmAlert();
+
+    await evaluator.onPrice("#10", 0.8);
+
+    expect(database.alerts[0].arm_generation).toBe(2);
+    expect(database.alerts[0].last_observed_price).toBeNull();
+  });
+
   it("writes on threshold-side changes and periodic checkpoints, not every price tick", async () => {
     let now = 0;
     const database = new FakeSupabase([alert({ threshold: 0.7 })]);
