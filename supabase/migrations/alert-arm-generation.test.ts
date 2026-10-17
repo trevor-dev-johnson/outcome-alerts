@@ -21,6 +21,13 @@ describe("alert arm generation migration", () => {
     expect(sql).toMatch(/status = 'active'[\s\S]*and arm_generation = p_arm_generation/);
   });
 
+  it("serializes claim and completion with re-arm using alert-first lock ordering", () => {
+    expect(sql).toContain("for update of alert");
+    expect(sql).toMatch(
+      /function public\.complete_alert_delivery_for_generation[\s\S]*?from public\.alerts[\s\S]*?for update;[\s\S]*?from public\.alert_delivery_claims[\s\S]*?for update;/,
+    );
+  });
+
   it("keeps the new RPCs service-role only with fixed search paths", () => {
     expect(sql.match(/security definer/g)).toHaveLength(6);
     expect(sql.match(/set search_path = ''/g)).toHaveLength(6);

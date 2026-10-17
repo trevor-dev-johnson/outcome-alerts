@@ -91,25 +91,36 @@ as $$
 declare
   claimed_chat_id bigint;
 begin
-  insert into public.alert_delivery_claims (
-    alert_id,
-    arm_generation,
-    claim_id,
-    telegram_chat_id,
-    crossing_price
-  )
-  select
-    alert.id,
-    alert.arm_generation,
-    p_claim_id,
-    profile.telegram_chat_id,
-    p_current_price
+  -- Serialize claims with re-arm/configuration updates. The re-arm trigger
+  -- locks the alert before deleting its claim, so every competing path must
+  -- acquire locks in the same alert-then-claim order.
+  select profile.telegram_chat_id
+  into claimed_chat_id
   from public.alerts as alert
   join public.profiles as profile on profile.id = alert.user_id
   where alert.id = p_alert_id
     and alert.status = 'active'
     and alert.arm_generation = p_arm_generation
     and profile.telegram_chat_id is not null
+  for update of alert;
+
+  if claimed_chat_id is null then
+    return null;
+  end if;
+
+  insert into public.alert_delivery_claims (
+    alert_id,
+    arm_generation,
+    claim_id,
+    telegram_chat_id,
+    crossing_price
+  ) values (
+    p_alert_id,
+    p_arm_generation,
+    p_claim_id,
+    claimed_chat_id,
+    p_current_price
+  )
   on conflict (alert_id) do nothing;
 
   select delivery.telegram_chat_id
@@ -136,6 +147,19 @@ declare
   delivery public.alert_delivery_claims%rowtype;
   updated_count integer;
 begin
+  -- Rearm/configuration changes lock the alert before deleting its claim.
+  -- Match that order to avoid an alert/claim deadlock, while retaining
+  -- idempotent completion after the alert has already become triggered.
+  perform 1
+  from public.alerts
+  where id = p_alert_id
+    and arm_generation = p_arm_generation
+  for update;
+
+  if not found then
+    return false;
+  end if;
+
   select *
   into delivery
   from public.alert_delivery_claims
