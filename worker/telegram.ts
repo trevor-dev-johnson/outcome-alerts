@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Bot } from "grammy";
+import { Bot, GrammyError } from "grammy";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Alert } from "@/lib/types";
 import { formatProbability } from "@/lib/format";
@@ -21,6 +21,10 @@ export function createTelegramBot(token: string, supabase: SupabaseClient) {
   });
   bot.catch((error) => console.error("telegram_bot_error", { error: error.error instanceof Error ? error.error.message : String(error.error) }));
   return bot;
+}
+
+export function classifyTelegramSendFailure(error: unknown) {
+  return error instanceof GrammyError ? "rejected" as const : "ambiguous" as const;
 }
 
 export async function sendAlert(bot: Bot, chatId: string, alert: Alert, currentPrice: number) {

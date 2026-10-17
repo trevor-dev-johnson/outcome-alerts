@@ -4,7 +4,7 @@ import type { Bot } from "grammy";
 import { didCrossThreshold } from "@/lib/alerts/evaluate";
 import type { Alert } from "@/lib/types";
 import { defaultSupabaseRetryOptions, type RetryOptions, withRetry } from "./retry";
-import { sendAlert } from "./telegram";
+import { classifyTelegramSendFailure, sendAlert } from "./telegram";
 
 const BASELINE_CHECKPOINT_MS = 5 * 60_000;
 const BASELINE_RETRY_COOLDOWN_MS = 30_000;
@@ -30,6 +30,8 @@ export class AlertEvaluator {
   private persistedBaselines = new Map<string, number | null>();
   private lastCheckpoint = new Map<string, number>();
   private nextBaselineAttempt = new Map<string, number>();
+  private inFlight = new Set<Promise<void>>();
+  private shuttingDown = false;
   private readonly retry: RetryOptions;
   private readonly baselineCheckpointMs: number;
   private readonly baselineRetryCooldownMs: number;
@@ -104,16 +106,32 @@ export class AlertEvaluator {
   }
 
   async onPrice(coin: string, currentPrice: number) {
+    if (this.shuttingDown) return;
     const matching = [...this.alerts.values()].filter((alert) => coinFor(alert) === coin);
-    await Promise.allSettled(matching.map((alert) => this.evaluateOne(alert, currentPrice)));
+    const operation = Promise.allSettled(
+      matching.map((alert) => this.evaluateOne(alert, currentPrice)),
+    ).then(() => undefined);
+    this.inFlight.add(operation);
+    try { await operation; }
+    finally { this.inFlight.delete(operation); }
+  }
+
+  beginShutdown() {
+    this.shuttingDown = true;
+  }
+
+  async drain() {
+    await Promise.allSettled([...this.inFlight]);
   }
 
   private async evaluateOne(alert: Alert, currentPrice: number) {
+    if (this.shuttingDown) return;
     const previousPrice = alert.last_observed_price;
     const crossed = didCrossThreshold({ operator: alert.operator, previousPrice, currentPrice, threshold: alert.threshold });
 
     if (crossed) {
       const claimId = this.createClaimId();
+      let phase: "claim" | "telegram" | "completion" = "claim";
       try {
         const chatId = await this.request("alert_delivery_claim", () =>
           this.supabase.rpc("claim_alert_delivery_for_generation", {
@@ -126,7 +144,13 @@ export class AlertEvaluator {
 
         if (chatId != null) {
           this.alerts.delete(alert.id);
+          console.info("alert_delivery_claimed", {
+            alertId: alert.id,
+            armGeneration: alert.arm_generation,
+          });
+          phase = "telegram";
           await sendAlert(this.bot, String(chatId), alert, currentPrice);
+          phase = "completion";
           const completed = await this.request("alert_delivery_complete", () =>
             this.supabase.rpc("complete_alert_delivery_for_generation", {
               p_alert_id: alert.id,
@@ -140,7 +164,30 @@ export class AlertEvaluator {
         }
       } catch (error) {
         this.alerts.delete(alert.id);
-        console.error("alert_delivery_uncertain", { alertId:alert.id, marketId:alert.market_id, error:error instanceof Error ? error.message : String(error) });
+        const telegramFailure = phase === "telegram"
+          ? classifyTelegramSendFailure(error)
+          : null;
+        const deliveryState = phase === "claim"
+          ? "claim_outcome_unknown"
+          : phase === "completion"
+            ? "telegram_sent_completion_unknown"
+            : telegramFailure === "rejected"
+              ? "telegram_rejected"
+              : "telegram_outcome_unknown";
+        console.error(
+          deliveryState === "telegram_rejected"
+            ? "alert_delivery_failed"
+            : "alert_delivery_uncertain",
+          {
+            alertId: alert.id,
+            marketId: alert.market_id,
+            armGeneration: alert.arm_generation,
+            deliveryState,
+            telegramAttempted: phase !== "claim",
+            automaticRetry: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
         return;
       }
     }

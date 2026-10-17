@@ -66,6 +66,8 @@ class FakeSupabase {
   baselineUpdateCalls = 0;
   claimResponseTimeoutsRemaining = 0;
   completionFailuresRemaining = 0;
+  claimResponseGate: Promise<void> | null = null;
+  completionGate: Promise<void> | null = null;
   telegramChatId: string | null = "123456";
   beforeAlertUpdate: (() => void) | null = null;
 
@@ -101,6 +103,7 @@ class FakeSupabase {
         crossingPrice: Number(params.p_current_price),
         completed: false,
       });
+      if (this.claimResponseGate) await this.claimResponseGate;
       if (this.claimResponseTimeoutsRemaining > 0) {
         this.claimResponseTimeoutsRemaining -= 1;
         return { data: null, error: { status: 504, message: "Gateway Timeout" } };
@@ -110,6 +113,7 @@ class FakeSupabase {
 
     if (name === "complete_alert_delivery_for_generation") {
       this.completeCalls += 1;
+      if (this.completionGate) await this.completionGate;
       if (this.completionFailuresRemaining > 0) {
         this.completionFailuresRemaining -= 1;
         return { data: null, error: { status: 504, message: "Gateway Timeout" } };
@@ -168,8 +172,12 @@ function alert(overrides: Partial<Alert> = {}): Alert {
   };
 }
 
-function setup(database: FakeSupabase, options: { now?: () => number; maxAttempts?: number } = {}) {
-  const sendMessage = vi.fn(async () => ({ message_id: 1 }));
+function setup(database: FakeSupabase, options: {
+  now?: () => number;
+  maxAttempts?: number;
+  sendMessage?: () => Promise<unknown>;
+} = {}) {
+  const sendMessage = vi.fn(options.sendMessage ?? (async () => ({ message_id: 1 })));
   let claimNumber = 0;
   const evaluator = new AlertEvaluator(
     database as unknown as SupabaseClient,
@@ -186,6 +194,12 @@ function setup(database: FakeSupabase, options: { now?: () => number; maxAttempt
     },
   );
   return { evaluator, sendMessage };
+}
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
 }
 
 beforeEach(() => {
@@ -265,6 +279,144 @@ describe("AlertEvaluator delivery claims", () => {
     expect(await evaluator.refresh()).toHaveLength(0);
     await evaluator.onPrice("#10", 0.7);
     expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not acquire a new claim after shutdown begins", async () => {
+    const database = new FakeSupabase([alert()]);
+    const { evaluator, sendMessage } = setup(database);
+    await evaluator.refresh();
+
+    evaluator.beginShutdown();
+    await evaluator.onPrice("#10", 0.6);
+
+    expect(database.claimCalls).toBe(0);
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("finishes a delivery whose claim committed before shutdown", async () => {
+    const gate = deferred();
+    const database = new FakeSupabase([alert()]);
+    database.claimResponseGate = gate.promise;
+    const { evaluator, sendMessage } = setup(database);
+    await evaluator.refresh();
+
+    const delivery = evaluator.onPrice("#10", 0.6);
+    await vi.waitFor(() => expect(database.claims.size).toBe(1));
+    evaluator.beginShutdown();
+    const draining = evaluator.drain();
+    gate.resolve();
+    await Promise.all([delivery, draining]);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(database.completeCalls).toBe(1);
+    expect(database.alerts[0].status).toBe("triggered");
+  });
+
+  it("waits for an in-progress Telegram send and database completion", async () => {
+    const telegram = deferred<unknown>();
+    const database = new FakeSupabase([alert()]);
+    const { evaluator, sendMessage } = setup(database, {
+      sendMessage: () => telegram.promise,
+    });
+    await evaluator.refresh();
+
+    const delivery = evaluator.onPrice("#10", 0.6);
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+    evaluator.beginShutdown();
+    const draining = evaluator.drain();
+    telegram.resolve({ message_id: 1 });
+    await Promise.all([delivery, draining]);
+
+    expect(database.completeCalls).toBe(1);
+    expect(database.alerts[0].status).toBe("triggered");
+  });
+
+  it("waits when Telegram succeeded but database completion is pending", async () => {
+    const completion = deferred();
+    const database = new FakeSupabase([alert()]);
+    database.completionGate = completion.promise;
+    const { evaluator, sendMessage } = setup(database);
+    await evaluator.refresh();
+
+    const delivery = evaluator.onPrice("#10", 0.6);
+    await vi.waitFor(() => expect(database.completeCalls).toBe(1));
+    evaluator.beginShutdown();
+    const draining = evaluator.drain();
+    completion.resolve();
+    await Promise.all([delivery, draining]);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(database.alerts[0].status).toBe("triggered");
+  });
+
+  it("keeps an unresolved claim suppressed after worker restart", async () => {
+    const database = new FakeSupabase([alert()]);
+    database.claims.set("alert-1", {
+      claimId: "prior-worker-claim",
+      armGeneration: 1,
+      chatId: "123456",
+      crossingPrice: 0.6,
+      completed: false,
+    });
+    const { evaluator, sendMessage } = setup(database);
+
+    expect(await evaluator.refresh()).toHaveLength(0);
+    await evaluator.onPrice("#10", 0.7);
+
+    expect(database.claimCalls).toBe(0);
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not act on a concurrent re-arm after shutdown starts", async () => {
+    const database = new FakeSupabase([alert()]);
+    const { evaluator, sendMessage } = setup(database);
+    await evaluator.refresh();
+
+    database.rearmAlert();
+    evaluator.beginShutdown();
+    await evaluator.onPrice("#10", 0.6);
+
+    expect(database.claimCalls).toBe(0);
+    expect(database.alerts[0].last_observed_price).toBeNull();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("labels an unknown Telegram outcome and never retries automatically", async () => {
+    const database = new FakeSupabase([alert()]);
+    const { evaluator, sendMessage } = setup(database, {
+      sendMessage: async () => { throw new Error("socket closed"); },
+    });
+    await evaluator.refresh();
+
+    await evaluator.onPrice("#10", 0.6);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(database.completeCalls).toBe(0);
+    expect(console.error).toHaveBeenCalledWith(
+      "alert_delivery_uncertain",
+      expect.objectContaining({
+        deliveryState: "telegram_outcome_unknown",
+        automaticRetry: false,
+      }),
+    );
+  });
+
+  it("labels completion failure after Telegram success without redelivery", async () => {
+    const database = new FakeSupabase([alert()]);
+    database.completionFailuresRemaining = 10;
+    const { evaluator, sendMessage } = setup(database, { maxAttempts: 2 });
+    await evaluator.refresh();
+
+    await evaluator.onPrice("#10", 0.6);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(console.error).toHaveBeenCalledWith(
+      "alert_delivery_uncertain",
+      expect.objectContaining({
+        deliveryState: "telegram_sent_completion_unknown",
+        automaticRetry: false,
+      }),
+    );
   });
 });
 

@@ -1,7 +1,7 @@
-import type { Bot } from "grammy";
+import { GrammyError, HttpError, type Bot } from "grammy";
 import { describe, expect, it, vi } from "vitest";
 import type { Alert } from "@/lib/types";
-import { sendAlert } from "./telegram";
+import { classifyTelegramSendFailure, sendAlert } from "./telegram";
 
 function alert(marketId: string, outcome: Alert["outcome"] = "YES"): Alert {
   return {
@@ -60,5 +60,25 @@ describe("sendAlert", () => {
         })]],
       },
     });
+  });
+});
+
+describe("classifyTelegramSendFailure", () => {
+  it("classifies a Telegram API rejection as definite", () => {
+    const error = new GrammyError(
+      "Bad Request",
+      { ok: false, error_code: 400, description: "Bad Request" },
+      "sendMessage",
+      {},
+    );
+
+    expect(classifyTelegramSendFailure(error)).toBe("rejected");
+  });
+
+  it("classifies transport failures as ambiguous delivery outcomes", () => {
+    const error = new HttpError("network failed", new Error("ECONNRESET"));
+
+    expect(classifyTelegramSendFailure(error)).toBe("ambiguous");
+    expect(classifyTelegramSendFailure(new Error("timeout"))).toBe("ambiguous");
   });
 });
