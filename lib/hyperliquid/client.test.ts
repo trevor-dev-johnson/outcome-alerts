@@ -228,3 +228,60 @@ describe("HIP-4 market name normalization", () => {
       .toBe("Will the launch happen this year?");
   });
 });
+
+describe("HIP-4 market search metadata", () => {
+  it("preserves authoritative NBA and NFL metadata for team-name market titles", async () => {
+    const outcomes = [
+      {
+        outcome: 1,
+        name: "template:sportsContestWinner",
+        description: "competition:NBA|participantA:Detroit Pistons|participantB:Boston Celtics|scheduledStart:20261018-1700|sport:basketball",
+        sideSpecs: [{ name: "YES" }, { name: "NO" }],
+      },
+      {
+        outcome: 2,
+        name: "template:sportsTournamentParticipant",
+        description: "participant:San Antonio Spurs",
+        sideSpecs: [{ name: "YES" }, { name: "NO" }],
+      },
+      {
+        outcome: 3,
+        name: "template:sportsContestWinner",
+        description: "competition:NFL|participantA:Baltimore Ravens|participantB:Cleveland Browns|scheduledStart:20261018-1700|sport:football",
+        sideSpecs: [{ name: "YES" }, { name: "NO" }],
+      },
+      {
+        outcome: 4,
+        name: "template:sportsTotal",
+        description: "line:41.5|measure:points|participantA:Baltimore Ravens|participantB:Cleveland Browns|scheduledStart:20261018-1700|sport:football",
+        sideSpecs: [{ name: "YES" }, { name: "NO" }],
+      },
+    ];
+    vi.stubGlobal("fetch", vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { type: string };
+      const value = body.type === "outcomeMeta"
+        ? {
+            outcomes,
+            questions: [{
+              description: "competition:NBA|sport:basketball",
+              namedOutcomes: [2],
+            }],
+          }
+        : {};
+      return new Response(JSON.stringify(value), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }));
+    const { fetchMarkets } = await importClient();
+    const markets = await fetchMarkets();
+
+    expect(markets.find((market) => market.id === "1")).toMatchObject({
+      name: "Will Detroit Pistons beat Boston Celtics?",
+      searchTerms: ["NBA", "basketball"],
+    });
+    expect(markets.find((market) => market.id === "2")?.searchTerms).toEqual(["NBA", "basketball"]);
+    expect(markets.find((market) => market.id === "3")?.searchTerms).toEqual(["NFL", "football"]);
+    expect(markets.find((market) => market.id === "4")?.searchTerms).toEqual(["NFL", "football"]);
+  });
+});

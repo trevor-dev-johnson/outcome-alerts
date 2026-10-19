@@ -6,6 +6,7 @@ export type MarketSource = "live" | "preview" | "stale";
 export interface Market {
   id: string;
   name: string;
+  searchTerms?: string[];
   description?: string;
   category?: string;
   yesCoin: string;

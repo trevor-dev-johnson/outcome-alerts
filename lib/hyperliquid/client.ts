@@ -30,6 +30,50 @@ function parseDescriptor(value = "") {
   }));
 }
 
+function contestKey(descriptor: Record<string, string>) {
+  const participants = [descriptor.participantA, descriptor.participantB]
+    .filter(Boolean)
+    .map((participant) => participant.toLowerCase())
+    .sort();
+  if (participants.length !== 2 || !descriptor.scheduledStart) return null;
+  return `${participants.join("|")}|${descriptor.scheduledStart.toLowerCase()}`;
+}
+
+function contestCompetitionIndex(items: OutcomeMetaItem[]) {
+  const competitions = new Map<string, string | null>();
+  for (const item of items) {
+    const descriptor = parseDescriptor(item.description);
+    const key = contestKey(descriptor);
+    if (!key || !descriptor.competition) continue;
+    const existing = competitions.get(key);
+    competitions.set(
+      key,
+      existing === undefined || existing === descriptor.competition ? descriptor.competition : null,
+    );
+  }
+  return competitions;
+}
+
+function marketSearchTerms(
+  item: OutcomeMetaItem,
+  question: OutcomeQuestion | undefined,
+  competitionByContest: Map<string, string | null>,
+) {
+  const own = parseDescriptor(item.description);
+  const parent = parseDescriptor(question?.description);
+  const key = contestKey(own);
+  const inheritedCompetition = key ? competitionByContest.get(key) : undefined;
+  return [...new Set([
+    own.competition,
+    own.league,
+    parent.competition,
+    parent.league,
+    inheritedCompetition,
+    own.sport,
+    parent.sport,
+  ].filter((value): value is string => Boolean(value)))];
+}
+
 function formatTarget(value?: string) {
   const number = Number(value);
   return Number.isFinite(number) ? `$${number.toLocaleString("en-US")}` : value;
@@ -125,6 +169,7 @@ export async function fetchMarkets(): Promise<Market[]> {
   ]);
   const questionByOutcome = new Map<number, OutcomeQuestion>();
   for (const question of metadata.questions ?? []) for (const id of question.namedOutcomes ?? []) questionByOutcome.set(id, question);
+  const competitionByContest = contestCompetitionIndex(metadata.outcomes ?? []);
   const markets = (metadata.outcomes ?? [])
     .filter((item) => item.status?.toLowerCase() !== "resolved" && !item.name?.toLowerCase().includes("fallback") && item.name !== "Recurring Named Outcome")
     .map((item) => {
@@ -138,6 +183,7 @@ export async function fetchMarkets(): Promise<Market[]> {
       return {
         id,
         name: normalizeMarketName(item, questionByOutcome.get(Number(id))),
+        searchTerms: marketSearchTerms(item, questionByOutcome.get(Number(id)), competitionByContest),
         description: item.description,
         yesCoin,
         noCoin,

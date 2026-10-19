@@ -8,6 +8,21 @@ import type { Market, MarketSource } from "@/lib/types";
 
 const MARKET_FRESHNESS_WINDOW_MS = 5_000;
 
+function matchesSearchTerm(market: Market, query: string) {
+  return (market.searchTerms ?? []).some((term) => {
+    const normalizedTerm = term.toLowerCase();
+    return normalizedTerm === query || normalizedTerm.split(/[^a-z0-9]+/).includes(query);
+  });
+}
+
+export function filterMarkets(markets: Market[], query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return markets;
+  const metadataMatches = markets.filter((market) => matchesSearchTerm(market, normalizedQuery));
+  if (metadataMatches.length) return metadataMatches;
+  return markets.filter((market) => market.name.toLowerCase().includes(normalizedQuery));
+}
+
 export function displayedSource(source: MarketSource, fetchedAt: string): MarketSource {
   if (source !== "live") return source;
   const timestamp = Date.parse(fetchedAt);
@@ -38,7 +53,7 @@ export function MarketList({
     const id = window.setInterval(refresh, 8_000);
     return () => window.clearInterval(id);
   }, []);
-  const visible = useMemo(() => markets.filter((m) => m.name.toLowerCase().includes(query.toLowerCase())), [markets, query]);
+  const visible = useMemo(() => filterMarkets(markets, query), [markets, query]);
   return <>
     <div className="searchbar"><Search size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter markets…" aria-label="Filter markets" /><span className="eyebrow">{visible.length} markets</span></div>
     {source === "preview" && <div className="notice">Preview data is shown while live Hyperliquid outcome metadata is unavailable.</div>}
