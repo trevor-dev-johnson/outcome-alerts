@@ -21,7 +21,7 @@ describe("PublicNav authentication state", () => {
     }));
     const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((match) => match[1]);
 
-    expect(hrefs).toEqual(["/", "/movers", "/markets", "/alerts", "/settings"]);
+    expect(hrefs).toEqual(["/", "/movers", "/markets", "/radar", "/alerts", "/settings"]);
     expect(html).toContain('aria-current="page" href="/markets"');
     expect(html).not.toContain('href="/login"');
     expect(html).not.toContain('href="/about"');

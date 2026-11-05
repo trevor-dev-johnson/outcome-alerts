@@ -1,0 +1,54 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+const mocks = vi.hoisted(() => ({ viewer: vi.fn(), client: vi.fn(), markets: vi.fn(), rpc: vi.fn(), revalidate: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ getViewer: mocks.viewer }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.client }));
+vi.mock("@/lib/hyperliquid/client", () => ({ getMarketsWithFallback: mocks.markets }));
+vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
+import { createRadarSubscription, manageRadarSubscription } from "./actions";
+function form(values: Record<string, string> = {}) {
+  const result = new FormData();
+  Object.entries({ targetKind: "category", target: "NBA", window: "1h", threshold: "5", consent: "yes", ...values }).forEach(([k, v]) => result.set(k, v));
+  return result;
+}
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.viewer.mockResolvedValue({ id: "user-a", preview: false });
+  mocks.client.mockResolvedValue({ rpc: mocks.rpc });
+  mocks.rpc.mockResolvedValue({ data: true, error: null });
+  mocks.markets.mockResolvedValue({ source: "live", markets: [{ id: "1", name: "Team names only", searchTerms: ["NBA"] }] });
+});
+describe("Radar actions", () => {
+  it("saves opt-in with caller-derived identity only", async () => {
+    expect(await createRadarSubscription({}, form({ user_id: "forged-user" }))).toHaveProperty("success");
+    expect(mocks.rpc).toHaveBeenCalledWith("create_radar_subscription", { p_kind: "category", p_target: "NBA", p_window: "1h", p_threshold: 5, p_consent: true });
+  });
+  it("blocks anonymous and preview mutations before a database call", async () => {
+    for (const viewer of [null, { id: "preview", preview: true }]) {
+      mocks.viewer.mockResolvedValue(viewer);
+      expect(await createRadarSubscription({}, form())).toHaveProperty("error");
+      expect(await manageRadarSubscription({}, form())).toHaveProperty("error");
+    }
+    expect(mocks.client).not.toHaveBeenCalled();
+  });
+  it("rejects missing consent, unsupported category, invalid threshold and stale metadata", async () => {
+    for (const invalid of [{ consent: "" }, { target: "NFLX" }, { threshold: "NaN" }] as Record<string, string>[])
+      expect(await createRadarSubscription({}, form(invalid))).toHaveProperty("error");
+    mocks.markets.mockResolvedValue({ source: "stale", markets: [] });
+    expect(await createRadarSubscription({}, form())).toHaveProperty("error");
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("does not infer a league from a title", async () => {
+    mocks.markets.mockResolvedValue({ source: "live", markets: [{ id: "1", name: "NBA Finals", searchTerms: [] }] });
+    expect(await createRadarSubscription({}, form())).toHaveProperty("error");
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("manages by caller-scoped RPC and reports cross-user/missing records safely", async () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    for (const operation of ["pause", "resume", "remove"]) {
+      expect(await manageRadarSubscription({}, form({ id, operation }))).toHaveProperty("success");
+      expect(mocks.rpc).toHaveBeenLastCalledWith("manage_radar_subscription", { p_id: id, p_operation: operation });
+    }
+    mocks.rpc.mockResolvedValue({ data: false, error: null });
+    expect(await manageRadarSubscription({}, form({ id, operation: "remove" }))).toHaveProperty("error");
+  });
+});

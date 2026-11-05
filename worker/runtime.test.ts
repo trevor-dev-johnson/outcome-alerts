@@ -15,6 +15,7 @@ function harness(options: {
   refresh?: () => Promise<Set<string>>;
   record?: () => Promise<{ inserted: number; cleaned: boolean }>;
   drain?: () => Promise<void>;
+  radar?: { run: () => Promise<void>; stop: () => void };
 } = {}) {
   const polling = deferred<void>();
   const evaluator = {
@@ -40,6 +41,7 @@ function harness(options: {
     historyIntervalMs: 300_000,
     shutdownTimeoutMs: 20_000,
     exit,
+    radar: options.radar,
   });
   return { runtime, evaluator, stream, history, bot, exit };
 }
@@ -57,6 +59,43 @@ afterEach(() => {
 });
 
 describe("WorkerRuntime graceful shutdown", () => {
+  it("starts WebSocket and polling without awaiting Radar, but drains Radar on shutdown", async () => {
+    const pending = deferred();
+    const radar = { run: vi.fn(() => pending.promise), stop: vi.fn() };
+    const { runtime, stream, bot, exit } = harness({ radar });
+    await runtime.start();
+    expect(stream.start).toHaveBeenCalledTimes(1);
+    expect(bot.start).toHaveBeenCalledTimes(1);
+    const stopping = runtime.requestShutdown("SIGTERM");
+    expect(radar.stop).toHaveBeenCalledTimes(1);
+    expect(exit).not.toHaveBeenCalled();
+    pending.resolve();
+    await stopping;
+    expect(exit).toHaveBeenCalledWith(0);
+  });
+  it("uses the existing history cadence and bot; Radar failures cannot stop alert intake", async () => {
+    const radar = { run: vi.fn(async () => { throw new Error("isolated Radar failure"); }), stop: vi.fn() };
+    const { runtime, history, evaluator, bot, stream } = harness({ radar });
+    await runtime.start();
+    expect(radar.run).toHaveBeenCalledTimes(1);
+    expect(bot.start).toHaveBeenCalledTimes(1);
+    expect(stream.start).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(history.record).toHaveBeenCalledTimes(2);
+    expect(radar.run).toHaveBeenCalledTimes(2);
+    expect(evaluator.refresh).toHaveBeenCalledTimes(11);
+    await runtime.requestShutdown("SIGTERM");
+    expect(radar.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not evaluate Radar when history recording fails", async () => {
+    const radar = { run: vi.fn(async () => undefined), stop: vi.fn() };
+    const { runtime, stream } = harness({ radar, record: async () => { throw new Error("history unavailable"); } });
+    await runtime.start();
+    expect(radar.run).not.toHaveBeenCalled();
+    expect(stream.start).toHaveBeenCalledTimes(1);
+    await runtime.requestShutdown("SIGTERM");
+  });
   it("stops intake and drains an idle worker", async () => {
     const { runtime, evaluator, stream, bot, exit } = harness();
     await runtime.start();

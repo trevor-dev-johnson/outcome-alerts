@@ -14,6 +14,7 @@ type RuntimeOptions = {
   historyIntervalMs: number;
   shutdownTimeoutMs: number;
   exit?: (code: number) => void;
+  radar?: { run: () => Promise<void>; stop: () => void };
 };
 
 function describeError(error: unknown) {
@@ -85,6 +86,14 @@ export class WorkerRuntime {
     return this.runTracked("market_history", async () => {
       const result = await this.history.record();
       console.info("market_history_recorded", result);
+      if (this.acceptingWork && result.inserted > 0 && this.options.radar) {
+        // Track for shutdown, but do not hold up WebSocket/polling startup.
+        const radar = this.options.radar;
+        void this.runTracked("radar_cycle", async () => {
+          try { await radar.run(); }
+          catch { console.error("radar_cycle_failed"); }
+        });
+      }
     });
   }
 
@@ -97,6 +106,7 @@ export class WorkerRuntime {
     this.historyTimer = null;
 
     this.evaluator.beginShutdown();
+    this.options.radar?.stop();
     this.stream.stop();
 
     const stopBot = Promise.resolve()

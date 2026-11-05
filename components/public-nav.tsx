@@ -12,6 +12,7 @@ export function PublicNav({
     ? [
         ["/movers", "Movers"],
         ["/markets", "Markets"],
+        ["/radar", "Radar"],
         ["/alerts", "Alerts"],
         ["/settings", "Settings"],
       ] as const
