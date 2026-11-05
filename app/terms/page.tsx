@@ -20,12 +20,11 @@ export default function TermsPage() {
         <p className="eyebrow">Terms of use</p>
         <h1>Watch markets. Make your own decisions.</h1>
         <p className={styles.lede}>oddsUp is a free, watch-only monitoring tool. It shows public HIP-4 market information and sends alerts you configure; it does not execute trades or control funds.</p>
-        <p className={styles.updated}>Draft for owner review · November 5, 2026</p>
-        <p className={styles.review}><strong>Owner or legal review required before publication:</strong> confirm the legal operator name and contact, minimum user age, governing law, dispute process, warranty language, and any liability cap.</p>
+        <p className={styles.updated}>Effective November 5, 2026</p>
       </header>
 
       <section className={styles.section}><h2>What oddsUp provides</h2><div className={styles.copy}>
-        <p>oddsUp provides informational access to public Hyperliquid HIP-4 market data, sampled movement views, and user-configured probability alerts. The service is currently offered without charge. Future pricing, if any, would require clear notice.</p>
+        <p>oddsUp provides informational access to public Hyperliquid HIP-4 market data, sampled movement views, and user-configured probability alerts. The service is currently free.</p>
         <p>Radar is marked Coming Soon. Radar configuration and notification delivery should not be treated as available until oddsUp explicitly launches that feature.</p>
       </div></section>
 
@@ -45,16 +44,16 @@ export default function TermsPage() {
 
       <section className={styles.section}><h2>Availability and data limits</h2><div className={styles.copy}>
         <p>Market data can be delayed, unavailable, incomplete, stale, or corrected upstream. Network outages, provider failures, maintenance, and software errors can delay or prevent an alert. Notification delivery is not guaranteed; an alert may be delayed or not delivered.</p>
-        <p>oddsUp may change, pause, or discontinue parts of the service when reasonably necessary for reliability, security, legal compliance, or product development.</p>
+        <p>oddsUp may change, pause, or discontinue parts of the service when reasonably necessary.</p>
       </div></section>
 
       <section className={styles.section}><h2>Acceptable use</h2><div className={styles.copy}>
         <p>Use oddsUp lawfully and do not attempt to disrupt the service, bypass access controls, probe other users&apos; data, automate abusive request volumes, or misuse Telegram delivery. Keep access to your email and Telegram accounts secure.</p>
       </div></section>
 
-      <section className={styles.section}><h2>Risk and review</h2><div className={styles.copy}>
-        <p>You use oddsUp and act on market information at your own risk. The product should not be represented as guaranteeing market accuracy, notification delivery, uptime, or a particular financial result.</p>
-        <p><strong>Legal terms still requiring owner review:</strong> the final operator identity, contact channel, eligibility rules, governing law, dispute procedure, warranty disclaimer, limitation of liability, and account-suspension process are intentionally not invented in this draft.</p>
+      <section className={styles.section}><h2>Your responsibility and contact</h2><div className={styles.copy}>
+        <p>You use oddsUp and act on market information at your own risk. You remain responsible for every decision you make. Abusive use, attempts to access another user&apos;s data, or disruption of the service may result in restricted access.</p>
+        <p>Questions about these terms can be directed to <a href="https://x.com/whizzkee" target="_blank" rel="noopener noreferrer">@whizzkee on X</a>.</p>
       </div></section>
     </main>
   </div>;
