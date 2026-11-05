@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { Brand } from "@/components/brand";
 import { PublicNav } from "@/components/public-nav";
 import { getViewer } from "@/lib/auth";
 import { aboutJsonLd, DEFAULT_SOCIAL_IMAGE, SITE_NAME, SITE_URL } from "@/lib/site";
@@ -123,18 +122,6 @@ export default async function AboutPage() {
           </section>
         </article>
       </main>
-
-      <footer className={styles.footer}>
-        <div className="shell">
-          <Brand />
-          <nav aria-label="Footer navigation">
-            <Link href="/">Home</Link>
-            <Link href="/movers">Movers</Link>
-            <Link href="/markets">Markets</Link>
-            <Link href={authenticated ? "/alerts" : "/login"}>{authenticated ? "Alerts" : "Sign in"}</Link>
-          </nav>
-        </div>
-      </footer>
     </div>
   );
 }

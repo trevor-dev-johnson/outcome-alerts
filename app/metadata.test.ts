@@ -14,6 +14,8 @@ describe("public metadata", () => {
       expect.objectContaining({ url: `${SITE_URL}/`, priority: 1 }),
       expect.objectContaining({ url: `${SITE_URL}/about`, priority: 0.8 }),
       expect.objectContaining({ url: `${SITE_URL}/movers`, priority: 0.9 }),
+      expect.objectContaining({ url: `${SITE_URL}/privacy`, priority: 0.3 }),
+      expect.objectContaining({ url: `${SITE_URL}/terms`, priority: 0.3 }),
     ]);
     const policy = robots();
     expect(policy.sitemap).toBe(`${SITE_URL}/sitemap.xml`);

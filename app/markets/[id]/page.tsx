@@ -5,11 +5,9 @@ import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AlertForm } from "@/components/alert-form";
 import { PublicNav } from "@/components/public-nav";
-import { TradeChooser } from "@/components/trade-chooser";
 import { formatProbability } from "@/lib/format";
 import { getAuthContext } from "@/lib/auth";
 import { getMarketsWithFallback } from "@/lib/hyperliquid/client";
-import { getHyperliquidMarketUrl } from "@/lib/hyperliquid/market-url";
 import { DEFAULT_SOCIAL_IMAGE, SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -59,8 +57,6 @@ export default async function MarketDetailPage({ params }: { params: Promise<{ i
   ]);
   if (!market) notFound();
   const loginHref = `/login?next=${encodeURIComponent(`/markets/${market.id}`)}`;
-  const yesTradeUrl = getHyperliquidMarketUrl(market, "YES");
-  const noTradeUrl = getHyperliquidMarketUrl(market, "NO");
 
   return <>
     <PublicNav authenticated={Boolean(viewer)} current="markets" />
@@ -68,12 +64,6 @@ export default async function MarketDetailPage({ params }: { params: Promise<{ i
       <Link href="/movers" className="eyebrow" style={{ display:"inline-flex", gap:8, alignItems:"center" }}><ArrowLeft size={13} /> Back to movers</Link>
       <div className="detail-grid"><section><p className="eyebrow">HIP-4 outcome · #{market.id}</p><h1 className="detail-question">{market.name}</h1>
         <div className="prob-pair"><div className="prob-hero"><span className="eyebrow">YES probability</span><strong>{formatProbability(market.yesPrice)}</strong></div><div className="prob-hero"><span className="eyebrow">NO probability</span><strong>{formatProbability(market.noPrice)}</strong></div></div>
-        <TradeChooser
-          yesUrl={yesTradeUrl}
-          noUrl={noTradeUrl}
-          yesProbability={market.yesPrice}
-          noProbability={market.noPrice}
-        />
         <p className="muted" style={{ fontSize:12, marginTop:14 }}>Live midpoint prices from Hyperliquid. Outcome prices are displayed as implied probabilities.</p>
       </section>{viewer
         ? <AlertForm market={market} telegramConnected={Boolean(profile?.telegram_chat_id)} />

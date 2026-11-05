@@ -41,6 +41,11 @@ export default function Home() {
             <Link href="/login" className="btn btn-primary">Get started <ArrowUpRight size={16} /></Link>
             <p>Monitor Hyperliquid HIP-4 outcome markets and get a Telegram alert when probability crosses your threshold.</p>
           </div>
+          <ul className="landing-trust" aria-label="Product principles">
+            <li>Free</li>
+            <li>Watch-only</li>
+            <li>Independent from Hyperliquid</li>
+          </ul>
         </div>
       </div>
     </main>

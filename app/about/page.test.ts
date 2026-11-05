@@ -17,25 +17,24 @@ import AboutPage from "./page";
 describe("About navigation", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("shows anonymous header and footer destinations", async () => {
+  it("passes anonymous state to the public navigation", async () => {
     mocks.getViewer.mockResolvedValue(null);
 
     const html = renderToStaticMarkup(await AboutPage());
 
     expect(mocks.getViewer).toHaveBeenCalledTimes(1);
     expect(html).toContain('data-authenticated="false"');
-    expect(html).toContain('href="/login">Sign in</a>');
+    expect(mocks.publicNav).toHaveBeenCalledWith({ authenticated: false, current: "about" }, undefined);
   });
 
-  it("shows authenticated header and footer destinations without exposing the viewer", async () => {
+  it("passes authenticated state to the public navigation without exposing the viewer", async () => {
     mocks.getViewer.mockResolvedValue({ id: "user-1", email: "owner@example.com", preview: false });
 
     const html = renderToStaticMarkup(await AboutPage());
 
     expect(mocks.getViewer).toHaveBeenCalledTimes(1);
     expect(html).toContain('data-authenticated="true"');
-    expect(html).toContain('href="/alerts">Alerts</a>');
-    expect(html).not.toContain('href="/login">Sign in</a>');
+    expect(mocks.publicNav).toHaveBeenCalledWith({ authenticated: true, current: "about" }, undefined);
     expect(html).not.toContain("owner@example.com");
   });
 });
