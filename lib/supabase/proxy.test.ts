@@ -15,9 +15,11 @@ describe("authenticated login routing", () => {
     expect(mocks.createServerClient).not.toHaveBeenCalled();
   });
 
-  it("keeps market detail readable while the market index remains protected", () => {
-    expect(isProtectedPath("/markets")).toBe(true);
+  it("keeps the market index and detail public while user-owned pages remain protected", () => {
+    expect(isProtectedPath("/markets")).toBe(false);
     expect(isProtectedPath("/markets/1473")).toBe(false);
+    expect(isProtectedPath("/alerts")).toBe(true);
+    expect(isProtectedPath("/settings")).toBe(true);
   });
 
   it("does not hide an authentication callback failure behind the previous session", () => {
@@ -39,6 +41,15 @@ describe("invalid SSR auth recovery", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project-ref.supabase.co";
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "publishable";
     mocks.createServerClient.mockReturnValue({ auth: { getUser } });
+  });
+
+  it("allows an anonymous visitor to browse the market index", async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: null });
+
+    const response = await updateSession(new NextRequest("https://oddsup.xyz/markets"));
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("server-timing")).toMatch(/^supabase-auth;dur=\d+$/);
   });
 
   it("clears an invalid session cookie and redirects with a useful message", async () => {

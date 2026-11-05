@@ -18,6 +18,7 @@ export function PublicNav({
       ] as const
     : [
         ["/movers", "Movers"],
+        ["/markets", "Markets"],
         ["/about", "About"],
         ["/login", "Sign in"],
       ] as const;

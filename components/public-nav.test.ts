@@ -8,7 +8,8 @@ describe("PublicNav authentication state", () => {
     const html = renderToStaticMarkup(createElement(PublicNav));
     const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((match) => match[1]);
 
-    expect(hrefs).toEqual(["/", "/movers", "/about", "/login"]);
+    expect(hrefs).toEqual(["/", "/movers", "/markets", "/about", "/login"]);
+    expect(html).toContain('href="/markets"');
     expect(html).toContain(">Sign in</a>");
     expect(html).not.toContain('href="/alerts"');
     expect(html).not.toContain('href="/settings"');

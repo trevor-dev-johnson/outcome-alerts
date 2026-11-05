@@ -19,7 +19,7 @@ export function isPublicUnauthenticatedPath(pathname: string) {
 }
 
 export function isProtectedPath(pathname: string) {
-  return pathname === "/markets" || ["/alerts", "/settings"].some(
+  return ["/alerts", "/settings"].some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
 }
