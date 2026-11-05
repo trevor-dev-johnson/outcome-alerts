@@ -12,12 +12,21 @@ function form(values: Record<string, string> = {}) {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv("RADAR_PUBLIC_ENABLED", "true");
   mocks.viewer.mockResolvedValue({ id: "user-a", preview: false });
   mocks.client.mockResolvedValue({ rpc: mocks.rpc });
   mocks.rpc.mockResolvedValue({ data: true, error: null });
   mocks.markets.mockResolvedValue({ source: "live", markets: [{ id: "1", name: "Team names only", searchTerms: ["NBA"] }] });
 });
 describe("Radar actions", () => {
+  it("fails closed before authentication or database access when the launch gate is disabled", async () => {
+    vi.stubEnv("RADAR_PUBLIC_ENABLED", "false");
+    expect(await createRadarSubscription({}, form())).toEqual({ error: "Radar is coming soon." });
+    expect(await manageRadarSubscription({}, form())).toEqual({ error: "Radar is coming soon." });
+    expect(mocks.viewer).not.toHaveBeenCalled();
+    expect(mocks.client).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
   it("saves opt-in with caller-derived identity only", async () => {
     expect(await createRadarSubscription({}, form({ user_id: "forged-user" }))).toHaveProperty("success");
     expect(mocks.rpc).toHaveBeenCalledWith("create_radar_subscription", { p_kind: "category", p_target: "NBA", p_window: "1h", p_threshold: 5, p_consent: true });

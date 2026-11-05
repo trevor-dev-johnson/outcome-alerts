@@ -11,6 +11,7 @@ import RadarPage, { metadata } from "./page";
 import { RadarCreateForm } from "./forms";
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv("RADAR_PUBLIC_ENABLED", "true");
   mocks.auth.mockResolvedValue({ viewer: { id: "preview", preview: true }, profile: null });
   mocks.markets.mockResolvedValue({ source: "preview", markets: [] });
   mocks.redirect.mockImplementation(() => { throw new Error("redirect"); });
@@ -20,6 +21,16 @@ describe("Radar page", () => {
     mocks.auth.mockResolvedValue({ viewer: null });
     await expect(RadarPage()).rejects.toThrow("redirect");
     expect(mocks.redirect).toHaveBeenCalledWith("/login?next=/radar");
+    expect(mocks.client).not.toHaveBeenCalled();
+  });
+  it("shows Coming Soon without loading Radar data when the launch gate is disabled", async () => {
+    vi.stubEnv("RADAR_PUBLIC_ENABLED", "");
+    const html = renderToStaticMarkup(await RadarPage());
+    expect(html).toContain("Coming Soon");
+    expect(html).toContain("Never miss a major odds move.");
+    expect(html).toContain("/alerts");
+    expect(html).not.toContain("Your follows");
+    expect(mocks.markets).not.toHaveBeenCalled();
     expect(mocks.client).not.toHaveBeenCalled();
   });
   it("is private/noindex, labels sampled behavior, and never pretends preview can save", async () => {

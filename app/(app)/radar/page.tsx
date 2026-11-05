@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/auth";
 import { getMarketsWithFallback } from "@/lib/hyperliquid/client";
 import { radarCategories, type RadarSubscription } from "@/lib/radar";
+import { radarPublicEnabled } from "@/lib/radar-public";
 import { createClient } from "@/lib/supabase/server";
 import { RadarCreateForm, RadarManageForm } from "./forms";
 import styles from "./radar.module.css";
@@ -13,6 +14,7 @@ export const metadata = { title: "Radar", robots: { index: false, follow: false 
 export default async function RadarPage() {
   const { viewer, profile } = await getAuthContext();
   if (!viewer) redirect("/login?next=/radar");
+  if (!radarPublicEnabled()) return <RadarComingSoon />;
   const snapshot = await getMarketsWithFallback();
   let subscriptions: RadarSubscription[] = [];
   let unavailable = false;
@@ -47,5 +49,29 @@ export default async function RadarPage() {
         </article>)}
       </section>
     </div>
+  </div></main>;
+}
+
+function RadarComingSoon() {
+  return <main className="app-main"><div className="shell">
+    <section className={styles.comingSoon} aria-labelledby="radar-coming-soon-title">
+      <div className={styles.comingCopy}>
+        <span className={styles.status}>Coming Soon</span>
+        <p className="eyebrow">Proactive market monitoring</p>
+        <h1 id="radar-coming-soon-title">Never miss a major odds move.</h1>
+        <p className={styles.lede}>Radar will automatically watch HIP-4 markets and notify you when probabilities move significantly.</p>
+        <ul className={styles.capabilities} aria-label="Planned Radar capabilities">
+          <li>Follow individual markets</li>
+          <li>Monitor NBA and NFL categories</li>
+          <li>Set custom movement thresholds</li>
+          <li>Get notified through Telegram</li>
+        </ul>
+        <Link className="btn btn-primary" href="/alerts">Use price alerts now</Link>
+      </div>
+      <div className={styles.radarVisual} aria-hidden="true">
+        <span className={styles.radarCore} />
+        <span className={styles.radarSignal} />
+      </div>
+    </section>
   </div></main>;
 }

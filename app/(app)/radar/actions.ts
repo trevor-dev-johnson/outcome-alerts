@@ -5,11 +5,13 @@ import { z } from "zod";
 import { getViewer } from "@/lib/auth";
 import { getMarketsWithFallback } from "@/lib/hyperliquid/client";
 import { radarCategories, radarInput } from "@/lib/radar";
+import { radarPublicEnabled } from "@/lib/radar-public";
 import { createClient } from "@/lib/supabase/server";
 
 export type RadarFormState = { error?: string; success?: string };
 
 export async function createRadarSubscription(_: RadarFormState, form: FormData): Promise<RadarFormState> {
+  if (!radarPublicEnabled()) return { error: "Radar is coming soon." };
   const viewer = await getViewer();
   if (!viewer || viewer.preview) return { error: "Sign in to save a Radar subscription." };
   const value = radarInput.safeParse(Object.fromEntries(form));
@@ -31,6 +33,7 @@ export async function createRadarSubscription(_: RadarFormState, form: FormData)
 }
 
 export async function manageRadarSubscription(_: RadarFormState, form: FormData): Promise<RadarFormState> {
+  if (!radarPublicEnabled()) return { error: "Radar is coming soon." };
   const viewer = await getViewer();
   if (!viewer || viewer.preview) return { error: "Sign in to manage Radar." };
   const value = z.object({ id: z.uuid(), operation: z.enum(["pause", "resume", "remove"]) }).safeParse(Object.fromEntries(form));
