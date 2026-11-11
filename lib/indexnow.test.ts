@@ -25,6 +25,8 @@ describe("IndexNow public URL allowlist", () => {
       "https://oddsup.xyz/",
       "https://oddsup.xyz/about",
       "https://oddsup.xyz/movers",
+      "https://oddsup.xyz/privacy",
+      "https://oddsup.xyz/terms",
     ]);
   });
 

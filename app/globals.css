@@ -81,7 +81,7 @@ a { color: inherit; text-decoration: none; }
 .mover-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; width: 100%; min-width: 0; max-width: 100%; min-height: 104px; border-top: 1px solid var(--line); transition: background .18s, padding .18s; }
 .mover-row:hover { padding-right: 12px; padding-left: 12px; background: rgba(255,255,255,.018); }
 .mover-row-main { display: grid; grid-template-columns: 44px 190px minmax(0, 1fr) 210px; gap: 22px; align-items: center; min-width: 0; min-height: 103px; }
-.mover-alert-action { min-width: 108px; white-space: nowrap; }
+.mover-alert-action { min-width: 108px; min-height: 44px; white-space: nowrap; }
 .mover-rank { color: #58615d; font-size: 11px; }
 .mover-change { display: grid; grid-template-columns: 24px minmax(0, auto); align-items: baseline; min-width: 0; column-gap: 7px; }
 .mover-change svg { grid-row: 1 / 3; align-self: center; }
