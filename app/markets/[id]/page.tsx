@@ -56,7 +56,8 @@ export default async function MarketDetailPage({ params }: { params: Promise<{ i
     getAuthContext(),
   ]);
   if (!market) notFound();
-  const loginHref = `/login?next=${encodeURIComponent(`/markets/${market.id}`)}`;
+  const alertConfigurationPath = `/markets/${market.id}#alert-configuration`;
+  const loginHref = `/login?next=${encodeURIComponent(alertConfigurationPath)}`;
 
   return <>
     <PublicNav authenticated={Boolean(viewer)} current="markets" />
@@ -67,7 +68,7 @@ export default async function MarketDetailPage({ params }: { params: Promise<{ i
         <p className="muted" style={{ fontSize:12, marginTop:14 }}>Live midpoint prices from Hyperliquid. Outcome prices are displayed as implied probabilities.</p>
       </section>{viewer
         ? <AlertForm market={market} telegramConnected={Boolean(profile?.telegram_chat_id)} />
-        : <aside className="form-panel">
+        : <aside className="form-panel" id="alert-configuration">
             <p className="eyebrow">New probability alert</p>
             <h2>Sign in to create alert</h2>
             <p className="muted">Sign in to choose a probability crossing and receive the alert through Telegram.</p>

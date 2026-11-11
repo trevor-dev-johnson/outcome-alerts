@@ -14,7 +14,7 @@ export function AlertForm({ market, telegramConnected }: { market: Market; teleg
   const showTelegramPrompt = Boolean(
     state.needsTelegram && state.alertId && dismissedAlertId !== state.alertId,
   );
-  return <aside className="form-panel">
+  return <aside className="form-panel" id="alert-configuration">
     <p className="eyebrow">New probability alert</p><h2>Choose a crossing</h2>
     <form action={action}>
       <input type="hidden" name="marketId" value={market.id} /><input type="hidden" name="marketName" value={market.name} />

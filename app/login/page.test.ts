@@ -16,6 +16,7 @@ import LoginPage from "./page";
 describe("login return destination", () => {
   it.each([
     ["market detail", "/markets/7637", "/markets/7637"],
+    ["market alert form", "/markets/7637#alert-configuration", "/markets/7637#alert-configuration"],
     ["Movers window", "/movers?window=5m", "/movers?window=5m"],
     ["external URL", "https://example.com/phish", "/markets"],
     ["protocol-relative URL", "//example.com/phish", "/markets"],

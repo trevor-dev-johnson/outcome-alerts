@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowDown, ArrowRight, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, BellRing } from "lucide-react";
 import { MoversRefresh } from "@/components/movers-refresh";
 import { PublicNav } from "@/components/public-nav";
 import { getViewer } from "@/lib/auth";
@@ -43,6 +43,11 @@ function freshnessLabel(fetchedAt: string | null) {
     timeZone: "UTC",
     timeZoneName: "short",
   }).format(new Date(fetchedAt))}`;
+}
+
+function alertConfigurationHref(marketId: string, authenticated: boolean) {
+  const marketPath = `/markets/${encodeURIComponent(marketId)}#alert-configuration`;
+  return authenticated ? marketPath : `/login?next=${encodeURIComponent(marketPath)}`;
 }
 
 const stateCopy = {
@@ -112,23 +117,37 @@ export default async function MoversPage({
               {snapshot.movers.map((mover, index) => {
                 const DirectionIcon = mover.direction === "up" ? ArrowUp : mover.direction === "down" ? ArrowDown : ArrowRight;
                 return (
-                  <Link className="mover-row" href={`/markets/${mover.marketId}`} key={mover.marketId}>
-                    <span className="mover-rank mono">{String(index + 1).padStart(2, "0")}</span>
-                    <span className={`mover-change mover-${mover.direction}`}>
-                      <DirectionIcon size={20} aria-hidden="true" />
-                      <strong>{signedPoints(mover.deltaPoints)}</strong>
-                      <small>pts · {window}</small>
-                    </span>
-                    <span className="mover-market">
-                      <strong>{mover.marketName}</strong>
-                      <small>HIP-4 outcome · #{mover.marketId}</small>
-                    </span>
-                    <span className="mover-probabilities mono">
-                      <span>{formatProbability(mover.historicalProbability)}</span>
-                      <ArrowRight size={14} aria-hidden="true" />
-                      <strong>{formatProbability(mover.currentProbability)}</strong>
-                    </span>
-                  </Link>
+                  <article className="mover-row" key={mover.marketId}>
+                    <Link
+                      className="mover-row-main"
+                      href={`/markets/${mover.marketId}`}
+                      aria-label={`View ${mover.marketName}`}
+                    >
+                      <span className="mover-rank mono">{String(index + 1).padStart(2, "0")}</span>
+                      <span className={`mover-change mover-${mover.direction}`}>
+                        <DirectionIcon size={20} aria-hidden="true" />
+                        <strong>{signedPoints(mover.deltaPoints)}</strong>
+                        <small>pts · {window}</small>
+                      </span>
+                      <span className="mover-market">
+                        <strong>{mover.marketName}</strong>
+                        <small>HIP-4 outcome · #{mover.marketId}</small>
+                      </span>
+                      <span className="mover-probabilities mono">
+                        <span>{formatProbability(mover.historicalProbability)}</span>
+                        <ArrowRight size={14} aria-hidden="true" />
+                        <strong>{formatProbability(mover.currentProbability)}</strong>
+                      </span>
+                    </Link>
+                    <Link
+                      className="btn btn-quiet mover-alert-action"
+                      href={alertConfigurationHref(mover.marketId, Boolean(viewer))}
+                      aria-label={`Set alert for ${mover.marketName}`}
+                    >
+                      <BellRing size={14} aria-hidden="true" />
+                      Set Alert
+                    </Link>
+                  </article>
                 );
               })}
             </div>

@@ -72,7 +72,8 @@ describe("public market alert handoff", () => {
     const html = renderToStaticMarkup(page);
 
     expect(html).toContain("Sign in to create alert");
-    expect(html).toContain('href="/login?next=%2Fmarkets%2F42"');
+    expect(html).toContain('id="alert-configuration"');
+    expect(html).toContain('href="/login?next=%2Fmarkets%2F42%23alert-configuration"');
     expect(html).not.toContain('data-testid="alert-form"');
     expect(html).toContain('data-authenticated="false"');
     expect(html).toContain('data-current="markets"');
@@ -122,7 +123,7 @@ describe("public market alert handoff", () => {
 
     expect(html).toContain('data-testid="alert-form"');
     expect(html).toContain(`data-telegram-connected="${String(connected)}"`);
-    expect(html).not.toContain('href="/login?next=%2Fmarkets%2F42"');
+    expect(html).not.toContain('href="/login?next=%2Fmarkets%2F42%23alert-configuration"');
     expect(html).toContain('data-authenticated="true"');
     expect(html).toContain('data-current="markets"');
     expect(html).not.toContain("Trade on Hyperliquid");

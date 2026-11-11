@@ -56,6 +56,7 @@ describe("sendMagicLink auth recovery", () => {
 
   it.each([
     ["/markets/7637", "http://localhost:3000/auth/callback?next=%2Fmarkets%2F7637"],
+    ["/markets/7637#alert-configuration", "http://localhost:3000/auth/callback?next=%2Fmarkets%2F7637%23alert-configuration"],
     ["/movers?window=5m", "http://localhost:3000/auth/callback?next=%2Fmovers%3Fwindow%3D5m"],
   ])("preserves a safe internal destination through the magic-link callback: %s", async (next, expected) => {
     const formData = new FormData();
