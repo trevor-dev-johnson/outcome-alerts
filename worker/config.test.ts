@@ -3,6 +3,7 @@ import {
   DEFAULT_ALERT_SYNC_INTERVAL_MS,
   DEFAULT_WORKER_SHUTDOWN_TIMEOUT_MS,
   getAlertSyncInterval,
+  getRadarDeliveryConfig,
   getWorkerShutdownTimeout,
 } from "./config";
 
@@ -33,5 +34,36 @@ describe("worker shutdown timeout", () => {
     expect(getWorkerShutdownTimeout("999")).toBe(20_000);
     expect(getWorkerShutdownTimeout("120001")).toBe(20_000);
     expect(getWorkerShutdownTimeout("not-a-number")).toBe(20_000);
+  });
+});
+
+describe("Radar delivery configuration", () => {
+  const first = "11111111-1111-4111-8111-111111111111";
+  const second = "22222222-2222-4222-8222-222222222222";
+
+  it("keeps the master switch fail-closed", () => {
+    expect(getRadarDeliveryConfig(undefined, "true", first)).toEqual({ enabled: false, mode: "disabled" });
+    expect(getRadarDeliveryConfig("false", "true", first)).toEqual({ enabled: false, mode: "disabled" });
+  });
+
+  it("requires a valid non-empty allowlist in canary mode", () => {
+    expect(getRadarDeliveryConfig("true", "true", undefined)).toEqual({ enabled: false, mode: "disabled" });
+    expect(getRadarDeliveryConfig("true", "true", " ")).toEqual({ enabled: false, mode: "disabled" });
+    expect(getRadarDeliveryConfig("true", "true", `${first},not-a-uuid`)).toEqual({ enabled: false, mode: "disabled" });
+  });
+
+  it("normalizes and deduplicates authorized canary accounts", () => {
+    const result = getRadarDeliveryConfig("true", "true", `${first.toUpperCase()}, ${second},${first}`);
+    expect(result.enabled && result.mode === "canary" ? [...result.userIds] : []).toEqual([first, second]);
+  });
+
+  it("fails closed for malformed modes or an orphaned allowlist", () => {
+    expect(getRadarDeliveryConfig("true", "TRUE", first)).toEqual({ enabled: false, mode: "disabled" });
+    expect(getRadarDeliveryConfig("true", undefined, first)).toEqual({ enabled: false, mode: "disabled" });
+  });
+
+  it("preserves separately approved global delivery semantics", () => {
+    expect(getRadarDeliveryConfig("true", undefined, undefined)).toEqual({ enabled: true, mode: "global" });
+    expect(getRadarDeliveryConfig("true", "false", "")).toEqual({ enabled: true, mode: "global" });
   });
 });

@@ -3,25 +3,26 @@ import { requireServerEnv } from "@/lib/env";
 import { fetchMarkets } from "@/lib/hyperliquid/client";
 import { OBSERVATION_BUCKET_MS } from "@/lib/movers";
 import { AlertEvaluator } from "./alerts";
-import { getAlertSyncInterval, getWorkerShutdownTimeout } from "./config";
+import { getAlertSyncInterval, getRadarDeliveryConfig, getWorkerShutdownTimeout } from "./config";
 import { HyperliquidStream } from "./hyperliquid";
 import { MarketHistoryRecorder, createSupabaseMarketHistoryStore } from "./history";
 import { WorkerRuntime } from "./runtime";
 import { createTelegramBot } from "./telegram";
-import { radarEnabled } from "@/lib/radar";
 import type { Market } from "@/lib/types";
 import { RadarEngine, createRadarStore } from "./radar";
 
 const supabase = createClient(requireServerEnv("NEXT_PUBLIC_SUPABASE_URL"), requireServerEnv("SUPABASE_SERVICE_ROLE_KEY"), { auth:{ persistSession:false, autoRefreshToken:false } });
 const bot = createTelegramBot(requireServerEnv("TELEGRAM_BOT_TOKEN"), supabase);
 const evaluator = new AlertEvaluator(supabase, bot);
-const radarOn = radarEnabled();
+const radarConfig = getRadarDeliveryConfig();
+const radarOn = radarConfig.enabled;
 let recordedMarkets: Market[] = [];
 const radar = radarOn ? new RadarEngine(createRadarStore(supabase),
   // grammY's Node typings use the older AbortController shim; its runtime
   // accepts the standard addEventListener/removeEventListener AbortSignal API.
   (chat, text, signal) => bot.api.sendMessage(chat, text, { link_preview_options: { is_disabled: true } },
-    signal as unknown as Parameters<typeof bot.api.sendMessage>[3]), true) : null;
+    signal as unknown as Parameters<typeof bot.api.sendMessage>[3]), true, Date.now, {},
+  radarConfig.mode === "canary" ? { mode: "canary", userIds: radarConfig.userIds } : { mode: "global" }) : null;
 const history = new MarketHistoryRecorder(createSupabaseMarketHistoryStore(supabase), radarOn ? async () => {
   recordedMarkets = await fetchMarkets();
   return recordedMarkets;

@@ -5,15 +5,18 @@ import { RADAR_MAX_MARKETS, RADAR_MAX_SUBSCRIPTIONS, radarMatches, radarMovement
 import type { Market } from "@/lib/types";
 import { defaultSupabaseRetryOptions, withRetry, type RetryOptions } from "./retry";
 
+type WorkerRadarSubscription = RadarSubscription & { user_id?: string };
+export type RadarDeliveryScope = { mode: "global" } | { mode: "canary"; userIds: ReadonlySet<string> };
+
 type Candidate = {
-  subscription: RadarSubscription;
+  subscription: WorkerRadarSubscription;
   market: Market;
   current: MarketProbabilityObservation;
   baseline: MarketProbabilityObservation;
   points: number;
 };
 export interface RadarStore {
-  subscriptions(): Promise<RadarSubscription[]>;
+  subscriptions(): Promise<WorkerRadarSubscription[]>;
   observations(ids: string[], bucket: string, windows: MoverWindow[], now: number): Promise<{
     current: MarketProbabilityObservation[];
     history: Partial<Record<MoverWindow, MarketProbabilityObservation[]>>;
@@ -43,6 +46,7 @@ export class RadarEngine {
     private readonly enabled: boolean,
     private readonly now: () => number = Date.now,
     retry: Partial<RetryOptions> = {},
+    private readonly scope: RadarDeliveryScope = { mode: "global" },
   ) { this.retry = { ...defaultSupabaseRetryOptions, ...retry }; }
 
   stop() { this.stopped = true; }
@@ -54,8 +58,13 @@ export class RadarEngine {
   private async cycle(markets: Market[]) {
     const started = this.now();
     if (markets.length > RADAR_MAX_MARKETS) throw new Error("radar_market_limit");
-    const subscriptions = await withRetry(() => this.store.subscriptions(), this.retry);
-    if (subscriptions.length > RADAR_MAX_SUBSCRIPTIONS) throw new Error("radar_subscription_limit");
+    const loadedSubscriptions = await withRetry(() => this.store.subscriptions(), this.retry);
+    if (loadedSubscriptions.length > RADAR_MAX_SUBSCRIPTIONS) throw new Error("radar_subscription_limit");
+    const scope = this.scope;
+    const subscriptions = scope.mode === "canary"
+      ? loadedSubscriptions.filter((subscription) => subscription.user_id != null
+        && scope.userIds.has(subscription.user_id.toLowerCase()))
+      : loadedSubscriptions;
     if (!this.stopped && this.now() - this.lastPrune >= 3_600_000) {
       await withRetry(() => this.store.prune(new Date(this.now() - 30 * 86_400_000).toISOString()), this.retry);
       this.lastPrune = this.now();
@@ -111,7 +120,7 @@ export function createRadarStore(client: SupabaseClient): RadarStore {
   return {
     async subscriptions() {
       const { data, error, count } = await client.from("radar_subscriptions")
-        .select("id,target_kind,target,window_name,threshold_points,generation,paused", { count: "exact" })
+        .select("id,user_id,target_kind,target,window_name,threshold_points,generation,paused", { count: "exact" })
         .eq("paused", false).order("id").limit(RADAR_MAX_SUBSCRIPTIONS + 1).abortSignal(AbortSignal.timeout(5_000));
       if (error) throw error;
       // PostgREST can truncate at its server row cap even with limit(1001).

@@ -5,7 +5,9 @@ import type { Market } from "@/lib/types";
 
 const now = Date.parse("2026-10-19T12:00:10Z");
 const market: Market = { id: "1", name: "Lakers vs Warriors", searchTerms: ["NBA"], yesCoin: "#10", noCoin: "#11", yesPrice: .5, noPrice: .5 };
-const sub: RadarSubscription = { id: "s", target_kind: "category", target: "NBA", window_name: "5m", threshold_points: 5, generation: 1, paused: false };
+const allowedUser = "11111111-1111-4111-8111-111111111111";
+const blockedUser = "22222222-2222-4222-8222-222222222222";
+const sub: RadarSubscription & { user_id: string } = { id: "s", user_id: allowedUser, target_kind: "category", target: "NBA", window_name: "5m", threshold_points: 5, generation: 1, paused: false };
 const current = { market_id: "1", bucket_at: "2026-10-19T12:00:00Z", observed_at: "2026-10-19T12:00:10Z", yes_probability: .5 };
 const baseline = { ...current, bucket_at: "2026-10-19T11:55:00Z", observed_at: "2026-10-19T11:55:10Z", yes_probability: .4 };
 function harness() {
@@ -28,7 +30,8 @@ function harness() {
     prune: vi.fn(async () => undefined),
   };
   const send = vi.fn(async () => undefined);
-  const create = (enabled = true) => new RadarEngine(store, send, enabled, () => now, { sleep: async () => undefined });
+  const create = (enabled = true, userIds?: ReadonlySet<string>) => new RadarEngine(store, send, enabled, () => now,
+    { sleep: async () => undefined }, userIds ? { mode: "canary", userIds } : { mode: "global" });
   return { store, send, create, events };
 }
 beforeEach(() => { vi.spyOn(console, "info").mockImplementation(() => undefined); vi.spyOn(console, "warn").mockImplementation(() => undefined); });
@@ -37,6 +40,25 @@ afterEach(() => vi.restoreAllMocks());
 describe("Radar delivery lifecycle", () => {
   it("disabled means no database work and no send", async () => {
     const h = harness(); await h.create(false).run([market]); expect(h.store.subscriptions).not.toHaveBeenCalled(); expect(h.send).not.toHaveBeenCalled();
+  });
+  it("canary mode processes only allowlisted accounts before claims", async () => {
+    const h = harness();
+    h.store.subscriptions.mockResolvedValue([
+      { ...sub, id: "allowed" },
+      { ...sub, id: "blocked", user_id: blockedUser },
+    ]);
+    await h.create(true, new Set([allowedUser])).run([market]);
+    expect(h.store.observations).toHaveBeenCalledTimes(1);
+    expect(h.store.claim).toHaveBeenCalledTimes(1);
+    expect(h.store.claim.mock.calls[0][0].subscription.id).toBe("allowed");
+    expect(h.send).toHaveBeenCalledTimes(1);
+  });
+  it("canary mode without a matching authorized account creates no claims", async () => {
+    const h = harness();
+    await h.create(true, new Set([blockedUser])).run([market]);
+    expect(h.store.observations).not.toHaveBeenCalled();
+    expect(h.store.claim).not.toHaveBeenCalled();
+    expect(h.send).not.toHaveBeenCalled();
   });
   it("single-flights concurrent cycles and suppresses repeats after restart", async () => {
     const h = harness(); const engine = h.create();
