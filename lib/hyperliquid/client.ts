@@ -3,7 +3,8 @@ import type { Market, MarketSnapshot } from "@/lib/types";
 
 const API_URL = process.env.HYPERLIQUID_API_URL ?? "https://api.hyperliquid.xyz";
 export const MARKET_CACHE_SECONDS = 5;
-const MARKET_CACHE_MAX_AGE_MS = MARKET_CACHE_SECONDS * 1_000;
+const MARKET_REFRESH_INTERVAL_MS = MARKET_CACHE_SECONDS * 1_000;
+export const MARKET_SNAPSHOT_MAX_AGE_MS = 60_000;
 const MARKET_REVALIDATION_COOLDOWN_MS = 10_000;
 
 interface OutcomeMetaItem {
@@ -224,16 +225,24 @@ let recentSnapshot: LiveMarketSnapshot | null = null;
 let snapshotReadInFlight: Promise<LiveMarketSnapshot> | null = null;
 let staleRevalidationCooldownUntil = 0;
 
-function snapshotAgeMs(snapshot: LiveMarketSnapshot, now = Date.now()) {
+function snapshotAgeMs(snapshot: Pick<MarketSnapshot, "fetchedAt">, now = Date.now()) {
   const fetchedAt = Date.parse(snapshot.fetchedAt);
-  return Number.isFinite(fetchedAt) ? Math.max(0, now - fetchedAt) : Number.POSITIVE_INFINITY;
+  const ageMs = now - fetchedAt;
+  return Number.isFinite(fetchedAt) && ageMs >= 0 ? ageMs : Number.POSITIVE_INFINITY;
+}
+
+export function isMarketSnapshotUsable(
+  snapshot: Pick<MarketSnapshot, "source" | "fetchedAt">,
+  now = Date.now(),
+) {
+  return snapshot.source !== "preview" && snapshotAgeMs(snapshot, now) <= MARKET_SNAPSHOT_MAX_AGE_MS;
 }
 
 async function readSharedSnapshot() {
   if (recentSnapshot) {
     const now = Date.now();
     if (
-      snapshotAgeMs(recentSnapshot, now) <= MARKET_CACHE_MAX_AGE_MS ||
+      snapshotAgeMs(recentSnapshot, now) <= MARKET_REFRESH_INTERVAL_MS ||
       now < staleRevalidationCooldownUntil
     ) {
       return recentSnapshot;
@@ -243,7 +252,7 @@ async function readSharedSnapshot() {
     snapshotReadInFlight = loadCachedLiveMarketSnapshot()
       .then((snapshot) => {
         recentSnapshot = snapshot;
-        staleRevalidationCooldownUntil = snapshotAgeMs(snapshot) > MARKET_CACHE_MAX_AGE_MS
+        staleRevalidationCooldownUntil = snapshotAgeMs(snapshot) > MARKET_REFRESH_INTERVAL_MS
           ? Date.now() + MARKET_REVALIDATION_COOLDOWN_MS
           : 0;
         return snapshot;
@@ -261,7 +270,7 @@ export async function getMarketsWithFallback(): Promise<MarketSnapshot> {
     // Next can return the previous value while it performs one coalesced
     // background revalidation. Keep that behavior fast, but never call the
     // expired snapshot live.
-    const source = ageMs > MARKET_CACHE_MAX_AGE_MS ? "stale" : "live";
+    const source = ageMs > MARKET_SNAPSHOT_MAX_AGE_MS ? "stale" : "live";
     console.info("public_market_snapshot_timing", {
       durationMs: Math.round(performance.now() - startedAt),
       snapshotAgeMs: ageMs,

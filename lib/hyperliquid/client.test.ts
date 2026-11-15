@@ -18,7 +18,19 @@ vi.mock("next/cache", () => ({
     let inFlight: Promise<unknown> | null = null;
     return async () => {
       cacheState.reads += 1;
-      if (cached !== undefined && (Date.now() <= expiresAt || cacheState.returnStaleOnExpiry)) {
+      if (cached !== undefined && Date.now() <= expiresAt) {
+        return cached;
+      }
+      if (cached !== undefined && cacheState.returnStaleOnExpiry) {
+        if (!inFlight) {
+          inFlight = loader()
+            .then((value) => {
+              cached = value;
+              expiresAt = Date.now() + options.revalidate * 1_000;
+              return value;
+            })
+            .finally(() => { inFlight = null; });
+        }
         return cached;
       }
       if (!inFlight) {
@@ -113,24 +125,77 @@ describe("public HIP-4 market snapshot cache", () => {
     expect(results.every((result) => result.source === "live")).toBe(true);
   });
 
-  it("does not present an expired snapshot as live while it revalidates", async () => {
-    const { getMarketsWithFallback } = await importClient();
+  it("keeps refresh scheduling at five seconds while a 10-30 second snapshot remains usable", async () => {
+    const { getMarketsWithFallback, MARKET_SNAPSHOT_MAX_AGE_MS } = await importClient();
     const live = await getMarketsWithFallback();
     expect(live.source).toBe("live");
 
     vi.advanceTimersByTime(5_001);
     cacheState.returnStaleOnExpiry = true;
-    const stale = await getMarketsWithFallback();
-    const repeatedStale = await getMarketsWithFallback();
-    expect(stale.source).toBe("stale");
-    expect(repeatedStale.source).toBe("stale");
-    expect(stale.markets).toEqual(live.markets);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    const usable = await getMarketsWithFallback();
+    expect(usable.source).toBe("live");
+    expect(usable.markets).toEqual(live.markets);
     expect(cacheState.reads).toBe(2);
+    expect(MARKET_SNAPSHOT_MAX_AGE_MS).toBe(60_000);
 
     vi.advanceTimersByTime(10_001);
     await getMarketsWithFallback();
     expect(cacheState.reads).toBe(3);
+  });
+
+  it("lets a background refresh replace an older but usable snapshot", async () => {
+    const { getMarketsWithFallback } = await importClient();
+    const first = await getMarketsWithFallback();
+    expect(first.markets[0].yesPrice).toBe(0.34);
+
+    vi.stubGlobal("fetch", vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { type: string };
+      const value = body.type === "outcomeMeta" ? metadata : { "#12090": "0.55", "#12091": "0.45" };
+      return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    vi.advanceTimersByTime(5_001);
+    cacheState.returnStaleOnExpiry = true;
+    const whileRefreshing = await getMarketsWithFallback();
+    expect(whileRefreshing.markets[0].yesPrice).toBe(0.34);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    vi.advanceTimersByTime(10_001);
+    const refreshed = await getMarketsWithFallback();
+    expect(refreshed.source).toBe("live");
+    expect(refreshed.markets[0].yesPrice).toBe(0.55);
+  });
+
+  it("fails closed for expired, invalid, and future snapshot timestamps", async () => {
+    const { isMarketSnapshotUsable } = await importClient();
+    const now = Date.parse("2026-09-24T12:00:00.000Z");
+
+    expect(isMarketSnapshotUsable({ source: "stale", fetchedAt: "2026-09-24T11:59:50.000Z" }, now)).toBe(true);
+    expect(isMarketSnapshotUsable({ source: "stale", fetchedAt: "2026-09-24T11:59:30.000Z" }, now)).toBe(true);
+    expect(isMarketSnapshotUsable({ source: "live", fetchedAt: "2026-09-24T11:58:59.999Z" }, now)).toBe(false);
+    expect(isMarketSnapshotUsable({ source: "live", fetchedAt: "not-a-date" }, now)).toBe(false);
+    expect(isMarketSnapshotUsable({ source: "live", fetchedAt: "2026-09-24T12:00:00.001Z" }, now)).toBe(false);
+    expect(isMarketSnapshotUsable({ source: "preview", fetchedAt: "2026-09-24T12:00:00.000Z" }, now)).toBe(false);
+  });
+
+  it("classifies a cached snapshot older than 60 seconds as stale", async () => {
+    const { getMarketsWithFallback } = await importClient();
+    expect((await getMarketsWithFallback()).source).toBe("live");
+
+    vi.advanceTimersByTime(60_001);
+    cacheState.returnStaleOnExpiry = true;
+    expect((await getMarketsWithFallback()).source).toBe("stale");
+  });
+
+  it("does not label a transient upstream failure as live", async () => {
+    const { getMarketsWithFallback } = await importClient();
+    expect((await getMarketsWithFallback()).source).toBe("live");
+
+    vi.advanceTimersByTime(5_001);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("upstream unavailable", { status: 503 })));
+    const fallback = await getMarketsWithFallback();
+
+    expect(fallback.source).toBe("preview");
   });
 
   it("uses preview data when the initial upstream request fails", async () => {
@@ -151,6 +216,25 @@ describe("public HIP-4 market snapshot cache", () => {
     expect(serialized).not.toContain("telegram");
     expect(serialized).not.toContain("refresh_token");
     expect(result.markets[0]).toMatchObject({ id: "1209", yesPrice: 0.34, noPrice: 0.66 });
+  });
+
+  it("keeps resolved markets out of a fresh normalized snapshot", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { type: string };
+      const value = body.type === "outcomeMeta"
+        ? {
+            outcomes: [
+              metadata.outcomes[0],
+              { ...metadata.outcomes[0], outcome: 1210, status: "resolved" },
+            ],
+            questions: [],
+          }
+        : { ...mids, "#12100": "0.9", "#12101": "0.1" };
+      return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const { fetchMarkets } = await importClient();
+
+    expect((await fetchMarkets()).map((market) => market.id)).toEqual(["1209"]);
   });
 });
 

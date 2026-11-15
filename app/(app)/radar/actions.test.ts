@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ viewer: vi.fn(), client: vi.fn(), markets: vi.fn(), rpc: vi.fn(), revalidate: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getViewer: mocks.viewer }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.client }));
-vi.mock("@/lib/hyperliquid/client", () => ({ getMarketsWithFallback: mocks.markets }));
+vi.mock("@/lib/hyperliquid/client", () => ({
+  getMarketsWithFallback: mocks.markets,
+  isMarketSnapshotUsable: (snapshot: { source: string; fetchedAt: string }, now = Date.now()) => {
+    const fetchedAt = Date.parse(snapshot.fetchedAt);
+    const ageMs = now - fetchedAt;
+    return snapshot.source !== "preview" && Number.isFinite(fetchedAt) && ageMs >= 0 && ageMs <= 60_000;
+  },
+}));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 import { createRadarSubscription, manageRadarSubscription } from "./actions";
 function form(values: Record<string, string> = {}) {
@@ -16,7 +23,11 @@ beforeEach(() => {
   mocks.viewer.mockResolvedValue({ id: "user-a", preview: false });
   mocks.client.mockResolvedValue({ rpc: mocks.rpc });
   mocks.rpc.mockResolvedValue({ data: true, error: null });
-  mocks.markets.mockResolvedValue({ source: "live", markets: [{ id: "1", name: "Team names only", searchTerms: ["NBA"] }] });
+  mocks.markets.mockResolvedValue({
+    source: "live",
+    fetchedAt: new Date().toISOString(),
+    markets: [{ id: "1", name: "Team names only", searchTerms: ["NBA"], yesPrice: 0.4, noPrice: 0.6 }],
+  });
 });
 describe("Radar actions", () => {
   it("fails closed before authentication or database access when the launch gate is disabled", async () => {
@@ -39,15 +50,44 @@ describe("Radar actions", () => {
     }
     expect(mocks.client).not.toHaveBeenCalled();
   });
-  it("rejects missing consent, unsupported category, invalid threshold and stale metadata", async () => {
+  it("rejects missing consent, unsupported category, invalid threshold and expired metadata", async () => {
     for (const invalid of [{ consent: "" }, { target: "NFLX" }, { threshold: "NaN" }] as Record<string, string>[])
       expect(await createRadarSubscription({}, form(invalid))).toHaveProperty("error");
-    mocks.markets.mockResolvedValue({ source: "stale", markets: [] });
+    mocks.markets.mockResolvedValue({
+      source: "stale",
+      fetchedAt: new Date(Date.now() - 60_001).toISOString(),
+      markets: [{ id: "1", name: "Team names only", searchTerms: ["NBA"], yesPrice: 0.4, noPrice: 0.6 }],
+    });
     expect(await createRadarSubscription({}, form())).toHaveProperty("error");
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
+  it("accepts usable cached metadata but rejects missing, closed, invalid-date, or unpriced markets", async () => {
+    mocks.markets.mockResolvedValue({
+      source: "stale",
+      fetchedAt: new Date(Date.now() - 30_000).toISOString(),
+      markets: [{ id: "1", name: "Team names only", searchTerms: ["NBA"], yesPrice: 0.4, noPrice: 0.6 }],
+    });
+    expect(await createRadarSubscription({}, form())).toHaveProperty("success");
+
+    for (const markets of [
+      [],
+      [{ id: "1", name: "Closed", searchTerms: ["NBA"], yesPrice: 0.4, noPrice: 0.6, closesAt: new Date(Date.now() - 1).toISOString() }],
+      [{ id: "1", name: "Invalid close", searchTerms: ["NBA"], yesPrice: 0.4, noPrice: 0.6, closesAt: "invalid" }],
+      [{ id: "1", name: "Empty close", searchTerms: ["NBA"], yesPrice: 0.4, noPrice: 0.6, closesAt: "" }],
+      [{ id: "1", name: "No prices", searchTerms: ["NBA"], yesPrice: null, noPrice: null }],
+    ]) {
+      mocks.rpc.mockClear();
+      mocks.markets.mockResolvedValue({ source: "live", fetchedAt: new Date().toISOString(), markets });
+      expect(await createRadarSubscription({}, form())).toHaveProperty("error");
+      expect(mocks.rpc).not.toHaveBeenCalled();
+    }
+  });
   it("does not infer a league from a title", async () => {
-    mocks.markets.mockResolvedValue({ source: "live", markets: [{ id: "1", name: "NBA Finals", searchTerms: [] }] });
+    mocks.markets.mockResolvedValue({
+      source: "live",
+      fetchedAt: new Date().toISOString(),
+      markets: [{ id: "1", name: "NBA Finals", searchTerms: [], yesPrice: 0.4, noPrice: 0.6 }],
+    });
     expect(await createRadarSubscription({}, form())).toHaveProperty("error");
     expect(mocks.rpc).not.toHaveBeenCalled();
   });

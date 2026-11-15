@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getViewer } from "@/lib/auth";
-import { getMarketsWithFallback } from "@/lib/hyperliquid/client";
+import { getMarketsWithFallback, isMarketSnapshotUsable } from "@/lib/hyperliquid/client";
 import { radarCategories, radarInput } from "@/lib/radar";
 import { radarPublicEnabled } from "@/lib/radar-public";
 import { createClient } from "@/lib/supabase/server";
@@ -18,9 +18,18 @@ export async function createRadarSubscription(_: RadarFormState, form: FormData)
   if (!value.success) return { error: "Choose a market or verified category, a window, 1–100 percentage points, and opt in to Telegram." };
   const snapshot = await getMarketsWithFallback();
   const v = value.data;
-  if (snapshot.source !== "live" || !snapshot.markets.some((market) =>
-    (!market.closesAt || Date.parse(market.closesAt) > Date.now()) &&
-    (v.targetKind === "market" ? market.id === v.target : radarCategories(market).includes(v.target))))
+  const now = Date.now();
+  if (!isMarketSnapshotUsable(snapshot, now) || !snapshot.markets.some((market) => {
+    const hasClosesAt = market.closesAt !== null && market.closesAt !== undefined;
+    const closesAt = hasClosesAt ? Date.parse(market.closesAt as string) : null;
+    const isOpen = closesAt === null || (Number.isFinite(closesAt) && closesAt > now);
+    const hasPrices = [market.yesPrice, market.noPrice].every((price) =>
+      typeof price === "number" && Number.isFinite(price) && price >= 0 && price <= 1);
+    const matches = v.targetKind === "market"
+      ? market.id === v.target
+      : radarCategories(market).includes(v.target);
+    return isOpen && hasPrices && matches;
+  }))
     return { error: "Live market metadata is unavailable for this selection. Try again shortly." };
   const client = await createClient();
   // Caller identity is derived inside the RPC from auth.uid(), never from form input.
