@@ -6,7 +6,7 @@ import { ArrowUpRight, Search } from "lucide-react";
 import { formatProbability } from "@/lib/format";
 import type { Market, MarketSource } from "@/lib/types";
 
-const MARKET_FRESHNESS_WINDOW_MS = 5_000;
+const MARKET_FRESHNESS_WINDOW_MS = 60_000;
 
 function matchesSearchTerm(market: Market, query: string) {
   return (market.searchTerms ?? []).some((term) => {
@@ -26,7 +26,8 @@ export function filterMarkets(markets: Market[], query: string) {
 export function displayedSource(source: MarketSource, fetchedAt: string): MarketSource {
   if (source !== "live") return source;
   const timestamp = Date.parse(fetchedAt);
-  return Number.isFinite(timestamp) && Date.now() - timestamp <= MARKET_FRESHNESS_WINDOW_MS
+  const age = Date.now() - timestamp;
+  return Number.isFinite(timestamp) && age >= 0 && age <= MARKET_FRESHNESS_WINDOW_MS
     ? "live"
     : "stale";
 }
@@ -59,13 +60,15 @@ export function MarketList({
     {source === "preview" && <div className="notice">Preview data is shown while live Hyperliquid outcome metadata is unavailable.</div>}
     {source === "stale" && <div className="notice">Last known prices are shown while live Hyperliquid data refreshes.</div>}
     <div className="market-list">
-      {visible.map((market) => <article className="market-row" key={market.id}>
-        <div><div className="market-meta"><span>{market.category ?? "HIP-4"}</span><span>#{market.id}</span></div><Link href={`/markets/${market.id}`} className="market-title">{market.name}</Link></div>
-        <div className="prob prob-yes"><span className="prob-label">YES</span><span className="prob-value live-pulse">{formatProbability(market.yesPrice)}</span></div>
-        <div className="prob"><span className="prob-label">NO</span><span className="prob-value">{formatProbability(market.noPrice)}</span></div>
-        <Link href={`/markets/${market.id}`} className="btn btn-quiet">Set alert <ArrowUpRight size={14} /></Link>
+      {visible.map((market) => <article className="market-card" key={market.id}>
+        <div className="market-card-copy"><div className="market-meta"><span>{market.category ?? "HIP-4"}</span><span>Market #{market.id}</span></div><Link href={`/markets/${market.id}`} className="market-title">{market.name}</Link></div>
+        <div className="market-card-probabilities" aria-label={`Current probabilities for ${market.name}`}>
+          <div className="prob prob-yes"><span className="prob-label">YES</span><span className="prob-value live-pulse">{formatProbability(market.yesPrice)}</span></div>
+          <div className="prob prob-no"><span className="prob-label">NO</span><span className="prob-value">{formatProbability(market.noPrice)}</span></div>
+        </div>
+        <Link href={`/markets/${market.id}`} className="btn btn-quiet market-card-action" aria-label={`Set alert for ${market.name}`}>Set alert <ArrowUpRight size={14} aria-hidden="true" /></Link>
       </article>)}
-      {!visible.length && <div className="empty">No markets match “{query}”.</div>}
+      {!visible.length && <div className="empty"><p>No markets match “{query}”.</p><button className="btn btn-quiet" type="button" onClick={() => setQuery("")}>Clear search</button></div>}
     </div>
   </>;
 }

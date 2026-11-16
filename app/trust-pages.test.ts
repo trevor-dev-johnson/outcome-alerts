@@ -12,6 +12,9 @@ describe("trust and policy pages", () => {
     expect(html).toContain("Free");
     expect(html).toContain("Watch-only");
     expect(html).toContain("Independent from Hyperliquid");
+    expect(html).toContain('href="/markets"');
+    expect(html).toContain('href="/movers"');
+    expect(html).toContain("no wallet connection");
   });
 
   it("publishes global Privacy and Terms links", () => {
