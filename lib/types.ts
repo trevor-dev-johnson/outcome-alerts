@@ -2,13 +2,16 @@ export type Outcome = "YES" | "NO";
 export type Operator = "above" | "below";
 export type AlertStatus = "active" | "triggered" | "disabled";
 export type MarketSource = "live" | "preview" | "stale";
+export type MarketCategory = "Sports" | "Crypto" | "Economics" | "Business" | "Other";
 
 export interface Market {
   id: string;
   name: string;
   searchTerms?: string[];
   description?: string;
-  category?: string;
+  category?: MarketCategory;
+  venue?: string;
+  protocolNative?: boolean;
   yesCoin: string;
   noCoin: string;
   yesPrice: number | null;

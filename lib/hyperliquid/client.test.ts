@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const cacheState = vi.hoisted(() => ({
   options: null as null | { revalidate: number; tags: string[] },
+  keys: [] as string[],
   returnStaleOnExpiry: false,
   reads: 0,
 }));
@@ -9,10 +10,11 @@ const cacheState = vi.hoisted(() => ({
 vi.mock("next/cache", () => ({
   unstable_cache: (
     loader: () => Promise<unknown>,
-    _keys: string[],
+    keys: string[],
     options: { revalidate: number; tags: string[] },
   ) => {
     cacheState.options = options;
+    cacheState.keys = keys;
     let cached: unknown;
     let expiresAt = 0;
     let inFlight: Promise<unknown> | null = null;
@@ -80,6 +82,7 @@ describe("public HIP-4 market snapshot cache", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-24T12:00:00.000Z"));
     cacheState.options = null;
+    cacheState.keys = [];
     cacheState.returnStaleOnExpiry = false;
     cacheState.reads = 0;
     vi.stubGlobal("fetch", successfulFetch());
@@ -101,6 +104,7 @@ describe("public HIP-4 market snapshot cache", () => {
       revalidate: 5,
       tags: ["public-hip4-markets"],
     });
+    expect(cacheState.keys).toEqual(["public-hip4-market-snapshot-v3"]);
   });
 
   it("refreshes the snapshot after expiry", async () => {
@@ -320,6 +324,7 @@ describe("HIP-4 market search metadata", () => {
         outcome: 1,
         name: "template:sportsContestWinner",
         description: "competition:NBA|participantA:Detroit Pistons|participantB:Boston Celtics|scheduledStart:20261018-1700|sport:basketball",
+        venue: "out",
         sideSpecs: [{ name: "YES" }, { name: "NO" }],
       },
       {
@@ -338,6 +343,7 @@ describe("HIP-4 market search metadata", () => {
         outcome: 4,
         name: "template:sportsTotal",
         description: "line:41.5|measure:points|participantA:Baltimore Ravens|participantB:Cleveland Browns|scheduledStart:20261018-1700|sport:football",
+        venue: "future-venue",
         sideSpecs: [{ name: "YES" }, { name: "NO" }],
       },
     ];
@@ -363,9 +369,46 @@ describe("HIP-4 market search metadata", () => {
     expect(markets.find((market) => market.id === "1")).toMatchObject({
       name: "Will Detroit Pistons beat Boston Celtics?",
       searchTerms: ["NBA", "basketball"],
+      category: "Sports",
+      venue: "out",
     });
     expect(markets.find((market) => market.id === "2")?.searchTerms).toEqual(["NBA", "basketball"]);
+    expect(markets.find((market) => market.id === "2")?.protocolNative).toBe(false);
     expect(markets.find((market) => market.id === "3")?.searchTerms).toEqual(["NFL", "football"]);
     expect(markets.find((market) => market.id === "4")?.searchTerms).toEqual(["NFL", "football"]);
+    expect(markets.find((market) => market.id === "4")?.venue).toBe("future-venue");
+  });
+});
+
+describe("HIP-4 market classification", () => {
+  it("uses authoritative templates and perp identifiers instead of title guesses", async () => {
+    const { classifyMarketCategory } = await importClient();
+
+    expect(classifyMarketCategory({ name: "template:sportsContestWinner" })).toBe("Sports");
+    expect(classifyMarketCategory({ name: "template:policyRateDecrease" })).toBe("Economics");
+    expect(classifyMarketCategory({ name: "template:companyIpoConfirmed" })).toBe("Business");
+    expect(classifyMarketCategory({
+      name: "template:binaryPrice",
+      description: "perp:BTC|threshold:100000|time:20261231-0000",
+    })).toBe("Crypto");
+    expect(classifyMarketCategory({
+      name: "template:binaryPrice",
+      description: "perp:xyz:NFLX|threshold:100|time:20261231-0000",
+    })).toBe("Other");
+    expect(classifyMarketCategory({
+      name: "Recurring",
+      description: "class:priceBinary|underlying:ETH|targetPrice:5000|expiry:20261231-0000",
+    })).toBe("Crypto");
+    expect(classifyMarketCategory({ name: "Will something happen?" })).toBe("Other");
+  });
+
+  it("identifies only no-venue recurring templates as protocol-native", async () => {
+    const { isProtocolNativeOutcome } = await importClient();
+
+    expect(isProtocolNativeOutcome({ name: "Recurring" })).toBe(true);
+    expect(isProtocolNativeOutcome({ name: "Recurring Fallback" })).toBe(true);
+    expect(isProtocolNativeOutcome({ name: "Recurring Named Outcome" })).toBe(true);
+    expect(isProtocolNativeOutcome({ name: "template:sportsContestWinner" })).toBe(false);
+    expect(isProtocolNativeOutcome({ name: "Recurring", venue: "out" })).toBe(false);
   });
 });

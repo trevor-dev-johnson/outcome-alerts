@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import type { Market, MarketSnapshot } from "@/lib/types";
+import type { Market, MarketCategory, MarketSnapshot } from "@/lib/types";
 
 const API_URL = process.env.HYPERLIQUID_API_URL ?? "https://api.hyperliquid.xyz";
 export const MARKET_CACHE_SECONDS = 5;
@@ -11,6 +11,7 @@ interface OutcomeMetaItem {
   outcome: number | string;
   name?: string;
   description?: string;
+  venue?: string;
   status?: string;
   sideSpecs?: Array<{ name?: string }>;
   startTime?: number;
@@ -73,6 +74,28 @@ function marketSearchTerms(
     own.sport,
     parent.sport,
   ].filter((value): value is string => Boolean(value)))];
+}
+
+export function classifyMarketCategory(item: Pick<OutcomeMetaItem, "name" | "description">): MarketCategory {
+  const template = item.name?.startsWith("template:") ? item.name.slice("template:".length) : item.name;
+  if (template?.startsWith("sports")) return "Sports";
+  if (template?.startsWith("policyRate")) return "Economics";
+  if (template?.startsWith("companyIpo")) return "Business";
+
+  const descriptor = parseDescriptor(item.description);
+  if (
+    ["binaryPrice", "priceTouch", "scalarPrice"].includes(template ?? "") &&
+    descriptor.perp &&
+    !descriptor.perp.includes(":")
+  ) return "Crypto";
+  if (item.name === "Recurring" && descriptor.class === "priceBinary" && descriptor.underlying) {
+    return descriptor.underlying.includes(":") ? "Other" : "Crypto";
+  }
+  return "Other";
+}
+
+export function isProtocolNativeOutcome(item: Pick<OutcomeMetaItem, "name" | "venue">) {
+  return !item.venue && ["Recurring", "Recurring Fallback", "Recurring Named Outcome"].includes(item.name ?? "");
 }
 
 function formatTarget(value?: string) {
@@ -186,6 +209,9 @@ export async function fetchMarkets(): Promise<Market[]> {
         name: normalizeMarketName(item, questionByOutcome.get(Number(id))),
         searchTerms: marketSearchTerms(item, questionByOutcome.get(Number(id)), competitionByContest),
         description: item.description,
+        category: classifyMarketCategory(item),
+        venue: item.venue,
+        protocolNative: isProtocolNativeOutcome(item),
         yesCoin,
         noCoin,
         yesPrice: Number.isFinite(yes) ? yes : null,
@@ -203,7 +229,7 @@ export async function fetchMarkets(): Promise<Market[]> {
 export const previewMarkets: Market[] = [
   { id: "1042", name: "Will BTC trade above $150,000 by December 31?", category: "Crypto", yesCoin: "#10420", noCoin: "#10421", yesPrice: 0.714, noPrice: 0.286, closesAt: "2026-12-31T23:59:59Z" },
   { id: "1048", name: "Will ETH outperform BTC this quarter?", category: "Crypto", yesCoin: "#10480", noCoin: "#10481", yesPrice: 0.438, noPrice: 0.562, closesAt: "2026-09-30T23:59:59Z" },
-  { id: "1051", name: "Will the Fed cut rates at its next meeting?", category: "Macro", yesCoin: "#10510", noCoin: "#10511", yesPrice: 0.623, noPrice: 0.377, closesAt: "2026-11-04T18:00:00Z" },
+  { id: "1051", name: "Will the Fed cut rates at its next meeting?", category: "Economics", yesCoin: "#10510", noCoin: "#10511", yesPrice: 0.623, noPrice: 0.377, closesAt: "2026-11-04T18:00:00Z" },
   { id: "1059", name: "Will SOL close the month above $250?", category: "Crypto", yesCoin: "#10590", noCoin: "#10591", yesPrice: 0.291, noPrice: 0.709, closesAt: "2026-09-30T23:59:59Z" },
 ];
 
@@ -217,7 +243,7 @@ async function loadLiveMarketSnapshot(): Promise<LiveMarketSnapshot> {
 
 const loadCachedLiveMarketSnapshot = unstable_cache(
   loadLiveMarketSnapshot,
-  ["public-hip4-market-snapshot-v1"],
+  ["public-hip4-market-snapshot-v3"],
   { revalidate: MARKET_CACHE_SECONDS, tags: ["public-hip4-markets"] },
 );
 
