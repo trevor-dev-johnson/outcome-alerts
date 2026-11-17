@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { SocialBrandMark } from "@/components/social-brand-mark";
 
 export const alt = "oddsUp — Telegram probability alerts for Hyperliquid HIP-4 outcome markets";
 export const size = { width: 1200, height: 630 };
@@ -33,20 +34,7 @@ export default function OpenGraphImage() {
       />
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", width: "100%" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <div
-            style={{
-              width: 42,
-              height: 42,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              border: "2px solid #51605a",
-              borderRadius: 9,
-              transform: "rotate(45deg)",
-            }}
-          >
-            <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#b9f227" }} />
-          </div>
+          <SocialBrandMark size={48} />
           <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-1px" }}>oddsUp</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
