@@ -211,6 +211,82 @@ describe("public HIP-4 market snapshot cache", () => {
     expect(fallback.markets).toHaveLength(4);
   });
 
+  it("performs one bounded foreground refresh for a cold Movers request", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      calls += 1;
+      if (calls <= 2) return new Response("upstream unavailable", { status: 503 });
+      const body = JSON.parse(String(init?.body)) as { type: string };
+      const value = body.type === "outcomeMeta" ? metadata : mids;
+      return new Response(JSON.stringify(value), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }));
+    const { getMarketsForMovers } = await importClient();
+
+    const result = await getMarketsForMovers();
+
+    expect(result).toMatchObject({ source: "live", markets: [{ id: "1209" }] });
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("coalesces concurrent foreground retries for Movers", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      calls += 1;
+      if (calls <= 2) return new Response("upstream unavailable", { status: 503 });
+      const body = JSON.parse(String(init?.body)) as { type: string };
+      const value = body.type === "outcomeMeta" ? metadata : mids;
+      return new Response(JSON.stringify(value), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }));
+    const { getMarketsForMovers } = await importClient();
+
+    const results = await Promise.all([
+      getMarketsForMovers(),
+      getMarketsForMovers(),
+      getMarketsForMovers(),
+    ]);
+
+    expect(results.every((result) => result.source === "live")).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps Movers fail-closed when the foreground retry also fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("upstream unavailable", { status: 503 })));
+    const { getMarketsForMovers } = await importClient();
+
+    const result = await getMarketsForMovers();
+
+    expect(result.source).toBe("preview");
+    expect(result.markets).toHaveLength(4);
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("replaces an expired cached snapshot before calculating Movers", async () => {
+    const { getMarketsForMovers, getMarketsWithFallback } = await importClient();
+    expect((await getMarketsWithFallback()).markets[0].yesPrice).toBe(0.34);
+
+    vi.stubGlobal("fetch", vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { type: string };
+      const value = body.type === "outcomeMeta" ? metadata : { "#12090": "0.58", "#12091": "0.42" };
+      return new Response(JSON.stringify(value), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }));
+    vi.advanceTimersByTime(60_001);
+    cacheState.returnStaleOnExpiry = true;
+
+    const result = await getMarketsForMovers();
+
+    expect(result.source).toBe("live");
+    expect(result.markets[0].yesPrice).toBe(0.58);
+  });
+
   it("caches only public market fields", async () => {
     const { getMarketsWithFallback } = await importClient();
     const result = await getMarketsWithFallback();

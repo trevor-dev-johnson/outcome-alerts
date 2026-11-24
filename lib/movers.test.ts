@@ -75,6 +75,47 @@ describe("HIP-4 mover calculation", () => {
     expect(result[0]).toMatchObject({ deltaPoints: -13, direction: "down" });
   });
 
+  it("preserves market metadata for Movers cards", () => {
+    const result = calculate("1h", [market({ category: "Sports", venue: "out" })], [
+      observation("101", 0.5, CURRENT_AT - 60 * 60_000),
+    ]);
+
+    expect(result[0]).toMatchObject({ category: "Sports", venue: "out" });
+  });
+
+  it("allows an explicitly bounded durable snapshot without weakening the live default", () => {
+    const observedAt = new Date(CURRENT_AT - 5 * 60_000).toISOString();
+    const observations = [observation("101", 0.5, CURRENT_AT - 10 * 60_000)];
+
+    expect(calculateMovers({
+      markets: [market()],
+      observations,
+      currentObservedAt: observedAt,
+      window: "5m",
+      now: CURRENT_AT,
+    })).toEqual([]);
+
+    expect(calculateMovers({
+      markets: [market()],
+      observations,
+      currentObservedAt: observedAt,
+      window: "5m",
+      now: CURRENT_AT,
+      maxCurrentAgeMs: 10 * 60_000,
+    })).toHaveLength(1);
+  });
+
+  it("rejects future timestamps even when a wider fallback age is allowed", () => {
+    expect(calculateMovers({
+      markets: [market()],
+      observations: [observation("101", 0.5, CURRENT_AT - 5 * 60_000)],
+      currentObservedAt: new Date(CURRENT_AT + 1).toISOString(),
+      window: "5m",
+      now: CURRENT_AT,
+      maxCurrentAgeMs: 10 * 60_000,
+    })).toEqual([]);
+  });
+
   it("ranks upward and downward moves by absolute point delta", () => {
     const markets = [
       market({ id: "up", name: "Up", yesPrice: 0.65 }),

@@ -249,6 +249,7 @@ const loadCachedLiveMarketSnapshot = unstable_cache(
 
 let recentSnapshot: LiveMarketSnapshot | null = null;
 let snapshotReadInFlight: Promise<LiveMarketSnapshot> | null = null;
+let moversRefreshInFlight: Promise<LiveMarketSnapshot> | null = null;
 let staleRevalidationCooldownUntil = 0;
 
 function snapshotAgeMs(snapshot: Pick<MarketSnapshot, "fetchedAt">, now = Date.now()) {
@@ -277,15 +278,32 @@ async function readSharedSnapshot() {
   if (!snapshotReadInFlight) {
     snapshotReadInFlight = loadCachedLiveMarketSnapshot()
       .then((snapshot) => {
-        recentSnapshot = snapshot;
-        staleRevalidationCooldownUntil = snapshotAgeMs(snapshot) > MARKET_REFRESH_INTERVAL_MS
+        const resolvedSnapshot = recentSnapshot &&
+          Date.parse(recentSnapshot.fetchedAt) > Date.parse(snapshot.fetchedAt)
+          ? recentSnapshot
+          : snapshot;
+        recentSnapshot = resolvedSnapshot;
+        staleRevalidationCooldownUntil = snapshotAgeMs(resolvedSnapshot) > MARKET_REFRESH_INTERVAL_MS
           ? Date.now() + MARKET_REVALIDATION_COOLDOWN_MS
           : 0;
-        return snapshot;
+        return resolvedSnapshot;
       })
       .finally(() => { snapshotReadInFlight = null; });
   }
   return snapshotReadInFlight;
+}
+
+async function refreshMoversSnapshot() {
+  if (!moversRefreshInFlight) {
+    moversRefreshInFlight = loadLiveMarketSnapshot()
+      .then((snapshot) => {
+        recentSnapshot = snapshot;
+        staleRevalidationCooldownUntil = 0;
+        return snapshot;
+      })
+      .finally(() => { moversRefreshInFlight = null; });
+  }
+  return moversRefreshInFlight;
 }
 
 export async function getMarketsWithFallback(): Promise<MarketSnapshot> {
@@ -313,5 +331,20 @@ export async function getMarketsWithFallback(): Promise<MarketSnapshot> {
       marketCount: previewMarkets.length,
     });
     return { markets: previewMarkets, source: "preview", fetchedAt: new Date().toISOString() };
+  }
+}
+
+export async function getMarketsForMovers(): Promise<MarketSnapshot> {
+  const cached = await getMarketsWithFallback();
+  if (cached.source === "live" && isMarketSnapshotUsable(cached)) return cached;
+
+  try {
+    return await refreshMoversSnapshot();
+  } catch (error) {
+    console.error("movers_market_refresh_failed", {
+      error: error instanceof Error ? error.message : String(error),
+      fallbackSource: cached.source,
+    });
+    return cached;
   }
 }

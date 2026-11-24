@@ -29,6 +29,8 @@ export type MarketProbabilityObservation = {
 export type Mover = {
   marketId: string;
   marketName: string;
+  category?: Market["category"];
+  venue?: string;
   closesAt: string | null;
   currentProbability: number;
   historicalProbability: number;
@@ -60,15 +62,22 @@ export function calculateMovers({
   currentObservedAt,
   window,
   now = Date.now(),
+  maxCurrentAgeMs = CURRENT_OBSERVATION_MAX_AGE_MS,
 }: {
   markets: Market[];
   observations: MarketProbabilityObservation[];
   currentObservedAt: string;
   window: MoverWindow;
   now?: number;
+  maxCurrentAgeMs?: number;
 }): Mover[] {
   const currentAt = Date.parse(currentObservedAt);
-  if (!Number.isFinite(currentAt) || now - currentAt > CURRENT_OBSERVATION_MAX_AGE_MS) return [];
+  const currentAgeMs = now - currentAt;
+  if (
+    !Number.isFinite(currentAt) ||
+    currentAgeMs < 0 ||
+    currentAgeMs > maxCurrentAgeMs
+  ) return [];
 
   const { durationMs, toleranceMs } = MOVER_WINDOW_RULES[window];
   const targetAt = currentAt - durationMs;
@@ -107,6 +116,8 @@ export function calculateMovers({
     movers.push({
       marketId: market.id,
       marketName: market.name,
+      category: market.category,
+      venue: market.venue,
       closesAt: market.closesAt ?? null,
       currentProbability,
       historicalProbability,

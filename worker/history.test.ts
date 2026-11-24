@@ -3,6 +3,7 @@ import type { Market } from "@/lib/types";
 import {
   MarketHistoryRecorder,
   createSupabaseMarketHistoryStore,
+  type CurrentMarketSnapshotRow,
   type MarketHistoryRow,
   type MarketHistoryStore,
 } from "./history";
@@ -26,6 +27,7 @@ class MemoryStore implements MarketHistoryStore {
   rows = new Map<string, MarketHistoryRow>();
   insertCalls = 0;
   cutoffs: string[] = [];
+  snapshots: Array<{ observedAt: string; rows: CurrentMarketSnapshotRow[] }> = [];
 
   async insertBucket(rows: MarketHistoryRow[]) {
     this.insertCalls += 1;
@@ -33,6 +35,10 @@ class MemoryStore implements MarketHistoryStore {
       const key = `${row.market_id}:${row.bucket_at}`;
       if (!this.rows.has(key)) this.rows.set(key, row);
     }
+  }
+
+  async publishCurrentSnapshot(observedAt: string, rows: CurrentMarketSnapshotRow[]) {
+    this.snapshots.push({ observedAt, rows });
   }
 
   async deleteBefore(cutoff: string) {
@@ -60,6 +66,19 @@ describe("market history recorder", () => {
       bucket_at: "2026-09-30T12:00:00.000Z",
       observed_at: "2026-09-30T12:02:00.000Z",
       yes_probability: 0.62,
+    }]);
+    expect(store.snapshots).toEqual([{
+      observedAt: "2026-09-30T12:02:00.000Z",
+      rows: [{
+        market_id: "101",
+        market_name: "Active market",
+        category: null,
+        venue: null,
+        protocol_native: false,
+        closes_at: "2026-10-01T00:00:00.000Z",
+        yes_probability: 0.62,
+        no_probability: 0.38,
+      }],
     }]);
   });
 
@@ -113,8 +132,9 @@ describe("market history recorder", () => {
 
   it("configures Supabase inserts as duplicate-safe upserts", async () => {
     const upsert = vi.fn(async () => ({ error: null }));
+    const rpc = vi.fn(async () => ({ error: null }));
     const from = vi.fn(() => ({ upsert }));
-    const store = createSupabaseMarketHistoryStore({ from } as never);
+    const store = createSupabaseMarketHistoryStore({ from, rpc } as never);
     const rows: MarketHistoryRow[] = [{
       market_id: "101",
       bucket_at: "2026-09-30T12:00:00.000Z",
@@ -127,6 +147,22 @@ describe("market history recorder", () => {
     expect(upsert).toHaveBeenCalledWith(rows, {
       onConflict: "market_id,bucket_at",
       ignoreDuplicates: true,
+    });
+
+    const snapshotRows: CurrentMarketSnapshotRow[] = [{
+      market_id: "101",
+      market_name: "Active market",
+      category: "Sports",
+      venue: "out",
+      protocol_native: false,
+      closes_at: "2026-10-01T00:00:00.000Z",
+      yes_probability: 0.62,
+      no_probability: 0.38,
+    }];
+    await store.publishCurrentSnapshot("2026-09-30T12:02:00.000Z", snapshotRows);
+    expect(rpc).toHaveBeenCalledWith("publish_market_current_snapshot", {
+      p_observed_at: "2026-09-30T12:02:00.000Z",
+      p_markets: snapshotRows,
     });
   });
 });

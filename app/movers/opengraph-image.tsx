@@ -1,5 +1,4 @@
 import { ImageResponse } from "next/og";
-import { SocialBrandMark } from "@/components/social-brand-mark";
 
 export const alt = "HIP-4 Movers — Biggest probability moves across Hyperliquid outcome markets";
 export const size = { width: 1200, height: 630 };
@@ -34,7 +33,20 @@ export default function MoversOpenGraphImage() {
       />
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", width: "100%" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <SocialBrandMark size={48} />
+          <div
+            style={{
+              width: 42,
+              height: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "2px solid #51605a",
+              borderRadius: 9,
+              transform: "rotate(45deg)",
+            }}
+          >
+            <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#b9f227" }} />
+          </div>
           <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-1px" }}>oddsUp</div>
         </div>
 

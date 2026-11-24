@@ -29,6 +29,7 @@ const snapshot = {
 const mover = {
   marketId: "42",
   marketName: "Will the test market resolve YES?",
+  category: "Sports" as const,
   closesAt: "2026-11-01T00:00:00.000Z",
   currentProbability: 0.62,
   historicalProbability: 0.51,
@@ -82,6 +83,30 @@ describe("Movers public navigation", () => {
     expect(html).toContain('href="/markets/42"');
     expect(html).toContain('href="/login?next=%2Fmarkets%2F42%23alert-configuration"');
     expect(html).toContain('aria-label="Set alert for Will the test market resolve YES?"');
+    expect(html).toContain("Sports");
+    expect(html).toContain("#1");
+    expect(html).not.toContain("#01");
+    expect(html).toContain("+11.0 pp");
+    expect(html).toContain("5-minute change");
+    expect(html).toContain("51.0%");
+    expect(html).toContain("62.0%");
+    expect(html).toContain("Live");
+  });
+
+  it("renders signed downward movement and an explicit UTC observation time", async () => {
+    mocks.getViewer.mockResolvedValue(null);
+    mocks.getMoversSnapshot.mockResolvedValue({
+      ...snapshot,
+      movers: [{ ...mover, currentProbability: 0.291, historicalProbability: 0.474, deltaPoints: -18.3, direction: "down" }],
+      insufficientHistoryCount: 0,
+    });
+
+    const page = await MoversPage({ searchParams: Promise.resolve({ window: "1h" }) });
+    const html = renderToStaticMarkup(page);
+
+    expect(html).toContain("-18.3 pp");
+    expect(html).toContain("1-hour change");
+    expect(html).toContain("Observed Oct 2, 12:00:00 PM UTC");
   });
 
   it("takes authenticated users directly to the existing alert form", async () => {
@@ -111,7 +136,45 @@ describe("Movers public navigation", () => {
     const html = renderToStaticMarkup(page);
 
     expect(html).toContain("Movers unavailable");
-    expect(html).not.toContain("Set Alert");
+    expect(html).not.toContain("Set alert");
+    expect(html).not.toContain("alert-configuration");
+  });
+
+  it("does not offer alert actions while a cached snapshot is updating", async () => {
+    mocks.getViewer.mockResolvedValue(null);
+    mocks.getMoversSnapshot.mockResolvedValue({
+      ...snapshot,
+      state: "updating",
+      movers: [mover],
+      insufficientHistoryCount: 0,
+    });
+
+    const page = await MoversPage({ searchParams: Promise.resolve({ window: "5m" }) });
+    const html = renderToStaticMarkup(page);
+
+    expect(html).toContain("Updating");
+    expect(html).toContain("They are not current prices.");
+    expect(html).not.toContain("Set alert");
+    expect(html).not.toContain("alert-configuration");
+  });
+
+  it("labels bounded cached results as last known with their observation time", async () => {
+    mocks.getViewer.mockResolvedValue(null);
+    mocks.getMoversSnapshot.mockResolvedValue({
+      ...snapshot,
+      state: "last-known",
+      movers: [mover],
+      insufficientHistoryCount: 0,
+    });
+
+    const page = await MoversPage({ searchParams: Promise.resolve({ window: "5m" }) });
+    const html = renderToStaticMarkup(page);
+
+    expect(html).toContain("Last known");
+    expect(html).toContain("Live prices are temporarily unavailable");
+    expect(html).toContain("12:00:00 PM UTC");
+    expect(html).toContain("Will the test market resolve YES?");
+    expect(html).not.toContain("Set alert");
     expect(html).not.toContain("alert-configuration");
   });
 });

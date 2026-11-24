@@ -8,6 +8,8 @@ describe("Movers loading state", () => {
     const html = renderToStaticMarkup(createElement(MoversLoading));
 
     expect(html).toContain('aria-label="Loading Movers"');
+    expect(html).toContain("Loading current movements");
+    expect(html.match(/<span><\/span>/g)).toHaveLength(3);
     expect(html).not.toContain("Sign in");
     expect(html).not.toContain("Public navigation");
   });

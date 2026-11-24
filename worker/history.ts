@@ -15,8 +15,20 @@ export type MarketHistoryRow = {
   yes_probability: number;
 };
 
+export type CurrentMarketSnapshotRow = {
+  market_id: string;
+  market_name: string;
+  category: string | null;
+  venue: string | null;
+  protocol_native: boolean;
+  closes_at: string | null;
+  yes_probability: number;
+  no_probability: number;
+};
+
 export interface MarketHistoryStore {
   insertBucket(rows: MarketHistoryRow[]): Promise<void>;
+  publishCurrentSnapshot(observedAt: string, rows: CurrentMarketSnapshotRow[]): Promise<void>;
   deleteBefore(cutoff: string): Promise<void>;
 }
 
@@ -29,6 +41,13 @@ export function createSupabaseMarketHistoryStore(supabase: SupabaseClient): Mark
           onConflict: "market_id,bucket_at",
           ignoreDuplicates: true,
         });
+      if (error) throw error;
+    },
+    async publishCurrentSnapshot(observedAt, rows) {
+      const { error } = await supabase.rpc("publish_market_current_snapshot", {
+        p_observed_at: observedAt,
+        p_markets: rows,
+      });
       if (error) throw error;
     },
     async deleteBefore(cutoff) {
@@ -82,11 +101,16 @@ export class MarketHistoryRecorder {
     const observedAt = new Date(observedAtMs).toISOString();
     const bucketAt = new Date(bucketStart(observedAtMs)).toISOString();
     const rows: MarketHistoryRow[] = [];
+    const snapshotRows: CurrentMarketSnapshotRow[] = [];
 
     for (const market of markets) {
-      if (market.yesPrice == null) continue;
+      if (market.yesPrice == null || market.noPrice == null) continue;
       const probability = Number(market.yesPrice);
-      if (!Number.isFinite(probability) || probability < 0 || probability > 1) continue;
+      const noProbability = Number(market.noPrice);
+      if (
+        !Number.isFinite(probability) || probability < 0 || probability > 1 ||
+        !Number.isFinite(noProbability) || noProbability < 0 || noProbability > 1
+      ) continue;
       const closesAt = market.closesAt ? Date.parse(market.closesAt) : Number.NaN;
       if (Number.isFinite(closesAt) && closesAt <= observedAtMs) continue;
       rows.push({
@@ -95,11 +119,25 @@ export class MarketHistoryRecorder {
         observed_at: observedAt,
         yes_probability: probability,
       });
+      snapshotRows.push({
+        market_id: market.id,
+        market_name: market.name,
+        category: market.category ?? null,
+        venue: market.venue ?? null,
+        protocol_native: market.protocolNative ?? false,
+        closes_at: Number.isFinite(closesAt) ? new Date(closesAt).toISOString() : null,
+        yes_probability: probability,
+        no_probability: noProbability,
+      });
     }
 
     if (rows.length === 0) return { inserted: 0, cleaned: false };
 
     await withRetry(() => this.store.insertBucket(rows), this.retry);
+    await withRetry(
+      () => this.store.publishCurrentSnapshot(observedAt, snapshotRows),
+      this.retry,
+    );
 
     let cleaned = false;
     if (observedAtMs - this.lastCleanupAt >= this.cleanupIntervalMs) {
